@@ -1,0 +1,11 @@
+{
+  "/icon.jpg/route": "app/icon.jpg/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/booking/page": "app/booking/page.js",
+  "/bookings/page": "app/bookings/page.js",
+  "/contacts/page": "app/contacts/page.js",
+  "/lessons/page": "app/lessons/page.js",
+  "/page": "app/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/schedules/page": "app/schedules/page.js"
+}

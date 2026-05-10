@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSignedInUser() {
+      return signedIn();
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        request.auth.token.email in [
+          "mamajonovasiljon7@gmail.com"
+        ];
+    }
+
+    match /events/{eventId} {
+      // Anyone can view the schedule and bookings
+      allow read: if true;
+
+      // Anyone can create a booking. Only admins can create lessons/facilities/contacts.
+      allow create: if request.resource.data.type == "booking" ||
+        (isAdmin() && request.resource.data.type in ["lesson", "facility", "contact"]);
+
+      // Only admins can update/delete ANY event. 
+      // Logged-in users can update/delete their own bookings if they happen to be logged in.
+      allow update, delete: if (isSignedInUser() &&
+        resource.data.type == "booking" &&
+        resource.data.createdBy == request.auth.uid) ||
+        isAdmin();
+    }
+  }
+}
