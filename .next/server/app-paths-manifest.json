@@ -1,7 +1,0 @@
-{
-  "/schedules/page": "app/schedules/page.js",
-  "/reset-password/page": "app/reset-password/page.js",
-  "/login/page": "app/login/page.js",
-  "/page": "app/page.js",
-  "/password/reset/confirm/[uid]/[token]/page": "app/password/reset/confirm/[uid]/[token]/page.js"
-}
