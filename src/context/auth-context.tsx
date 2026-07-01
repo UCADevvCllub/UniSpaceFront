@@ -1,17 +1,21 @@
 "use client";
 
-import {
-  GoogleAuthProvider,
-  User,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-} from "firebase/auth";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { auth } from "@/lib/firebase";
+import { createContext, useContext, useMemo } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { useRouter } from "next/navigation";
+
+// @ts-ignore
+import { logout } from "@/actions/auth";
+
+interface CustomUser {
+  id?: number;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+}
 
 interface AuthContextValue {
-  user: User | null;
+  user: CustomUser | null;
   loading: boolean;
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
@@ -27,30 +31,24 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
   .filter(Boolean);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Read state from Redux store
+  const user = useSelector((state: any) => state.auth.user);
+  const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (authUser) => {
-      setUser(authUser);
-      setLoading(false);
-    });
+  // loading is true while isAuthenticated is null (undetermined)
+  const loading = isAuthenticated === null;
 
-    return () => unsub();
-  }, []);
+  const dispatch = useDispatch();
+  const router = useRouter();
 
   const signIn = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Sign-in error:", error);
-      alert("Sign-in failed: " + (error instanceof Error ? error.message : String(error)));
-    }
+    // Redirect to the login page
+    router.push("/login");
   };
 
   const logOut = async () => {
-    await signOut(auth);
+    // Dispatch Redux logout action
+    dispatch(logout() as any);
   };
 
   const classYear = useMemo(() => {

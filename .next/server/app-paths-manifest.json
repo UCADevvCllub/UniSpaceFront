@@ -1,11 +1,7 @@
 {
-  "/icon.jpg/route": "app/icon.jpg/route.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/booking/page": "app/booking/page.js",
-  "/bookings/page": "app/bookings/page.js",
-  "/contacts/page": "app/contacts/page.js",
-  "/lessons/page": "app/lessons/page.js",
+  "/schedules/page": "app/schedules/page.js",
+  "/reset-password/page": "app/reset-password/page.js",
+  "/login/page": "app/login/page.js",
   "/page": "app/page.js",
-  "/profile/page": "app/profile/page.js",
-  "/schedules/page": "app/schedules/page.js"
+  "/password/reset/confirm/[uid]/[token]/page": "app/password/reset/confirm/[uid]/[token]/page.js"
 }

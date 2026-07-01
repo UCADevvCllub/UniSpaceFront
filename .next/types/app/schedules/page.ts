@@ -1,4 +1,4 @@
-// File: C:\Users\Student\uca-campus-hub\src\app\schedules\page.tsx
+// File: C:\UniSpaceFront\src\app\schedules\page.tsx
 import * as entry from '../../../../src/app/schedules/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
