@@ -140,50 +140,136 @@ export default function LessonsPage() {
         </Card>
       )}
 
-      {/* Freshman View */}
-      {activeGroup === "Freshman" && (
-        <Card className="p-6 bg-slate-50/50">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Freshman Weekly Schedule</h2>
-            {isAdmin && (
-              <Button onClick={() => { setFreshmanForm(freshmanSchedule); setIsEditingFreshman(!isEditingFreshman); }}>
-                {isEditingFreshman ? "Cancel" : "Edit"}
-              </Button>
-            )}
-          </div>room
+{/* Freshman View */}
+{activeGroup === "Freshman" && (
+  <Card className="space-y-4 border-slate-200 bg-slate-50/50 p-6">
+    <div className="flex items-center justify-between">
+      <h2 className="text-xl font-bold text-slate-900">Freshman Weekly Schedule</h2>
+      {isAdmin && (
+        <div className="flex gap-2">
+          <Button 
+            variant={isEditingFreshman ? "outline" : "default"}
+            onClick={() => {
+              setFreshmanForm(freshmanSchedule);
+              setIsEditingFreshman(!isEditingFreshman);
+            }}
+          >
+            {isEditingFreshman ? "Cancel" : "Edit Schedule"}
+          </Button>
+          {isEditingFreshman && <Button onClick={saveFreshmanSchedule}>Save All</Button>}
+        </div>
+      )}
+    </div>
 
-          {isEditingFreshman ? (
-            <div className="space-y-3">
-              {freshmanForm.map((lesson, idx) => (
-                <div key={lesson.id} className="flex gap-2 bg-white p-2 border rounded">
-
-                  <span className="text-xs">{lesson.title}</span>
+    {isEditingFreshman ? (
+      <div className="space-y-3">
+        {freshmanForm.map((lesson, idx) => (
+          <div key={lesson.id} className="flex items-center gap-2 bg-white p-3 rounded-xl border shadow-sm">
+             <span className="font-bold text-sm w-20">{lesson.day}</span>
+             <span className="flex-1">{lesson.title}</span>
+             <span className="text-slate-500 text-xs">{lesson.startTime} - {lesson.endTime}</span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      /* --- GOOGLE CALENDAR STYLE GRID --- */
+      <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
+        <div className="min-w-[1000px]">
+          
+          {/* 1. Header: Days of the Week */}
+          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
+            <div className="p-4 border-r border-slate-200 font-semibold text-slate-400 text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">
+              GMT+5
+            </div>
+            {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
+              <div key={day} className="p-3 border-r last:border-r-0 border-slate-200 text-center">
+                <div className="font-bold text-slate-700 text-sm tracking-wide">{day}</div>
+                <div className="grid grid-cols-2 gap-2 text-[9px] font-bold text-slate-400 mt-1 uppercase">
+                  <div>Cohort 1</div>
+                  <div>Cohort 2</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* 2. Calendar Body */}
+          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] relative h-[850px] bg-white">
+            
+            {/* Vertical Time Axis */}
+            <div className="border-r border-slate-200 relative bg-slate-50/50 sticky left-0 z-20">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div 
+                  key={i} 
+                  className="absolute w-full text-[10px] text-slate-400 font-medium pr-2 text-right" 
+                  style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}
+                >
+                  {String(8 + i).padStart(2, '0')}:00
                 </div>
               ))}
-              <Button onClick={saveFreshmanSchedule}>Save All Changes</Button>
             </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
 
-               <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] relative h-[800px]">
-
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
-                    <div key={day} className="border-r relative">
-                      {freshmanSchedule.filter(l => l.day === day).map(lesson => (
-                         <div key={lesson.id} className="absolute w-full border bg-blue-50 p-1 text-[10px]" style={{
-                           top: `${((timeToMinutes(lesson.startTime) - CALENDAR_START) / CALENDAR_DURATION) * 100}%`,
-                           height: `${((timeToMinutes(lesson.endTime) - timeToMinutes(lesson.startTime)) / CALENDAR_DURATION) * 100}%`
-                         }}>
-                           {lesson.title}
-                         </div>
-                      ))}
-                    </div>
+            {/* Day Columns */}
+            {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => {
+              const dayLessons = freshmanSchedule.filter(l => l.day === day);
+              return (
+                <div key={day} className="border-r last:border-r-0 border-slate-100 relative">
+                  {/* Horizontal Hour Lines (Background) */}
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="absolute w-full border-t border-slate-100" 
+                      style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} 
+                    />
                   ))}
-               </div>
-            </div>
-          )}
-        </Card>
-      )}
+
+                  {/* Lessons Mapped from Django */}
+                  {dayLessons.map(lesson => {
+                    const startMins = timeToMinutes(lesson.startTime);
+                    const endMins = timeToMinutes(lesson.endTime);
+                    const topPct = ((startMins - CALENDAR_START) / CALENDAR_DURATION) * 100;
+                    const heightPct = ((endMins - startMins) / CALENDAR_DURATION) * 100;
+
+                    // Split logic for Cohorts
+                    const isC1 = lesson.cohort === "Cohort 1";
+                    const isC2 = lesson.cohort === "Cohort 2";
+                    const isBoth = lesson.cohort === "Both";
+
+                    const left = isC2 ? "50%" : "0%";
+                    const width = isBoth ? "100%" : "50%";
+                    
+                    // Google-style colors
+                    const colorClass = isBoth 
+                      ? "bg-white border-slate-300 text-slate-800 shadow-sm" 
+                      : isC1 
+                        ? "bg-indigo-50 border-l-indigo-500 text-indigo-700" 
+                        : "bg-emerald-50 border-l-emerald-500 text-emerald-700";
+
+                    return (
+                      <div 
+                        key={lesson.id} 
+                        className={`absolute p-2 rounded-md border-l-4 border shadow-sm overflow-hidden transition-all hover:scale-[1.02] hover:z-30 ${colorClass}`}
+                        style={{ top: `${topPct}%`, height: `${heightPct}%`, left, width, zIndex: 10 }}
+                      >
+                        <div className="text-[10px] font-bold leading-tight line-clamp-2">{lesson.title}</div>
+                        <div className="text-[9px] opacity-80 mt-1 font-medium">
+                          {lesson.startTime} - {lesson.endTime}
+                        </div>
+                        <div className="text-[9px] font-bold mt-1 truncate uppercase">
+                          {lesson.room || "No Room"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    )}
+    {status && <p className="text-xs text-center text-slate-500">{status}</p>}
+  </Card>
+)}
 
 
       {activeGroup !== "Freshman" && activeGroup !== "Final Exams" && (
