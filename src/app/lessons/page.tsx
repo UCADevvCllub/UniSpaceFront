@@ -150,7 +150,7 @@ export default function LessonsPage() {
                 {isEditingFreshman ? "Cancel" : "Edit"}
               </Button>
             )}
-          </div>
+          </div>room
 
           {isEditingFreshman ? (
             <div className="space-y-3">
