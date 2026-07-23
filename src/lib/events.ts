@@ -1,3 +1,6 @@
+import axios from "axios";
+
+
 import {
   QueryConstraint,
   collection,
@@ -77,3 +80,45 @@ export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
     });
   });
 }
+
+
+export async function fetchClassEvents() {
+  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
+  return response.data; 
+}
+
+
+export const dayMap: Record<string, string> = {
+  'MON': 'MONDAY',
+  'TUE': 'TUESDAY',
+  'WED': 'WEDNESDAY',
+  'THU': 'THURSDAY',
+  'FRI': 'FRIDAY'
+};
+
+
+
+
+
+
+
+
+// Django Backend API Connections (from Bruno Collection)
+
+
+// export async function fetchGymEvents() {
+//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/gym-events/`);
+//   return response.data;
+// }
+// export async function fetchBubbleEvents() {
+//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/bubble-events/`);
+//   return response.data;
+// }
+// export async function fetchMealTimes() {
+//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/meal-times/`);
+//   return response.data;
+// }
+// export async function fetchScheduleEntries(params?: { day?: string; course?: string; study_year?: string }) {
+//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/schedule/`, { params });
+//   return response.data;
+// }

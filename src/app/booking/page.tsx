@@ -96,7 +96,7 @@ export default function BookingPage() {
           description: "",
           bookedBy: form.name,
           whatsapp: form.whatsapp,
-        }, user?.uid);
+        }, user?.id?.toString());
         setStatus("Booking successful!");
       }
       setForm({

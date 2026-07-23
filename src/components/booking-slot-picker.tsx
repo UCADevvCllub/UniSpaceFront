@@ -31,7 +31,7 @@ export function BookingSlotPicker() {
         start: new Date(start),
         end: new Date(end),
         description: "Booked from campus app",
-      }, user.uid);
+      }, user.id?.toString());
       setStatus("Booking confirmed.");
       setStart("");
       setEnd("");
