@@ -87,6 +87,11 @@ export async function fetchClassEvents() {
   return response.data;
 }
 
+export async function fetchBubbleEvents() {
+  const responce = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`)
+  return responce.data
+}
+
 export async function fetchGymEvents() {
   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`);
   return response.data;

@@ -10,6 +10,7 @@ import { useEvents } from "@/hooks/use-events";
 import { createScheduleEvent, deleteScheduleEvent, updateScheduleEvent } from "@/lib/admin-events";
 import { formatEventTime } from "@/lib/utils";
 import { fetchGymEvents } from "@/lib/events";
+import { fetchBubbleEvents } from "@/lib/events"
 
 const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
 type ScheduleTab = (typeof scheduleTabs)[number];
@@ -124,10 +125,57 @@ export default function SchedulesPage() {
     description: "",
   });
 
+  // fetching bubble-event data from the endpoint
+
+  const { data: djangoBubbleEvents, isLoading: isBubbleLoading } = useQuery({
+    queryKey: ["django-bubble-events"],
+    queryFn: fetchBubbleEvents,
+  });
+
+  // django bubble-event data to front end 
+
+  const djangoBubbleSchedule = useMemo(() => {
+    if (!djangoBubbleEvents?.length) return [];
+
+    const grouped = new Map<string, GymSlot>();
+
+    // determines the displays of the timeslot, day of the week
+
+    for (const event of djangoBubbleEvents) {
+      const day = event.event?.day?.toUpperCase();
+      const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
+      const dayKey = day ? gymDayKeyMap[day] : undefined;
+
+      if (!dayKey) continue;
+
+      const existing = grouped.get(slotKey) ?? {
+        time: slotKey,
+        mon: "",
+        tue: "",
+        wed: "",
+        thu: "",
+        fri: "",
+        sat: "",
+        sun: "",
+      };
+
+      // determinces the displays of the inside of the grid slot e.g (FOOTBALL, VOLLEYBALL)
+
+      existing[dayKey] = event.name ?? "";
+      grouped.set(slotKey, existing);
+    }
+
+    return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
+  }, [djangoBubbleEvents]);
+
+ // fetching gym-events data from the endpoint
+
   const { data: djangoGymEvents, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-gym-events"],
     queryFn: fetchGymEvents,
   });
+
+  // django gym-event data to front end 
 
   const djangoGymSchedule = useMemo(() => {
     if (!djangoGymEvents?.length) return [];
@@ -135,9 +183,11 @@ export default function SchedulesPage() {
     const grouped = new Map<string, GymSlot>();
 
     for (const event of djangoGymEvents) {
+
       const day = event.event?.day?.toUpperCase();
       const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
       const dayKey = day ? gymDayKeyMap[day] : undefined;
+    
 
       if (!dayKey) continue;
 
@@ -188,7 +238,7 @@ export default function SchedulesPage() {
     [facilities.data],
   );
   const bubblePrimaryEvent = bubbleEvents[0] ?? null;
-  const bubbleSchedule = parseBubbleSchedule(bubblePrimaryEvent?.description);
+  const bubbleSchedule = djangoBubbleSchedule.length > 0 ? djangoBubbleSchedule : [];
 
   const filteredEvents = useMemo(
     () =>
@@ -661,6 +711,7 @@ export default function SchedulesPage() {
 
       {activeTab === "Bubble" && (
         <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6 overflow-x-auto">
+          {isBubbleLoading && <p className="text-sm text-slate-500">Loading bubble endpoint data...</p>}
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Bubble Weekly Schedule</h2>
             {isAdmin && !isEditingBubble && (
