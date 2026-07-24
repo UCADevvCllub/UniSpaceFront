@@ -84,7 +84,12 @@ export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
 
 export async function fetchClassEvents() {
   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
-  return response.data; 
+  return response.data;
+}
+
+export async function fetchGymEvents() {
+  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`);
+  return response.data;
 }
 
 

@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Coffee, Sun, Moon } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import { useEvents } from "@/hooks/use-events";
 import { createScheduleEvent, deleteScheduleEvent, updateScheduleEvent } from "@/lib/admin-events";
 import { formatEventTime } from "@/lib/utils";
+import { fetchGymEvents } from "@/lib/events";
 
 const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
 type ScheduleTab = (typeof scheduleTabs)[number];
@@ -30,31 +31,6 @@ export type GymSlot = {
   sat: string;
   sun: string;
 };
-
-const defaultGymSchedule: GymSlot[] = [
-  { time: "06:00 - 08:00", mon: "FEMALE", tue: "MALE", wed: "FEMALE", thu: "MALE", fri: "FEMALE", sat: "MALE", sun: "FEMALE" },
-  { time: "08:00 - 10:00", mon: "MALE", tue: "FEMALE", wed: "MALE", thu: "FEMALE", fri: "MALE", sat: "FEMALE", sun: "MALE" },
-  { time: "10:00 - 10:30", mon: "CLEANING", tue: "CLEANING", wed: "CLEANING", thu: "CLEANING", fri: "CLEANING", sat: "CLEANING", sun: "CLEANING" },
-  { time: "10:30 - 12:30", mon: "FEMALE", tue: "MALE", wed: "FEMALE", thu: "MALE", fri: "FEMALE", sat: "MALE", sun: "FEMALE" },
-  { time: "12:30 - 14:30", mon: "FACULTY / OPS", tue: "FACULTY / OPS", wed: "FACULTY / OPS", thu: "FACULTY / OPS", fri: "FACULTY / OPS", sat: "FACULTY / OPS", sun: "FACULTY / OPS" },
-  { time: "14:30 - 15:00", mon: "CLEANING", tue: "CLEANING", wed: "CLEANING", thu: "CLEANING", fri: "CLEANING", sat: "CLEANING", sun: "CLEANING" },
-  { time: "15:00 - 17:00", mon: "MALE", tue: "FEMALE", wed: "MALE", thu: "FEMALE", fri: "MALE", sat: "FEMALE", sun: "MALE" },
-  { time: "17:00 - 19:00", mon: "FEMALE", tue: "MALE", wed: "FEMALE", thu: "MALE", fri: "FEMALE", sat: "MALE", sun: "FEMALE" },
-  { time: "19:00 - 21:00", mon: "FACULTY / OPS", tue: "FACULTY / OPS", wed: "FACULTY / OPS", thu: "FACULTY / OPS", fri: "FACULTY / OPS", sat: "FACULTY / OPS", sun: "FACULTY / OPS" },
-  { time: "21:00 - 22:30", mon: "MALE", tue: "FEMALE", wed: "MALE", thu: "FEMALE", fri: "MALE", sat: "FEMALE", sun: "MALE" },
-  { time: "22:30 - 00:00", mon: "FEMALE", tue: "MALE", wed: "FEMALE", thu: "MALE", fri: "FEMALE", sat: "MALE", sun: "FEMALE" },
-];
-
-function parseGymSchedule(description?: string): GymSlot[] {
-  if (!description) return defaultGymSchedule;
-  try {
-    const parsed = JSON.parse(description);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    // ignore
-  }
-  return defaultGymSchedule;
-}
 
 const defaultBubbleSchedule: GymSlot[] = [
   { time: "10:00am - 11:00am", mon: "CLEANING & DISINFECTION", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "CLEANING & DISINFECTION", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "CLEANING & DISINFECTION", sat: "", sun: "" },
@@ -117,7 +93,18 @@ function dateToInput(date: Date) {
   )}:${pad(date.getMinutes())}`;
 }
 
+const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
+  MON: "mon",
+  TUE: "tue",
+  WED: "wed",
+  THU: "thu",
+  FRI: "fri",
+  SAT: "sat",
+  SUN: "sun",
+};
+
 export default function SchedulesPage() {
+  console.log("Current API URL:", process.env.NEXT_PUBLIC_API_LOCAL);
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
@@ -125,7 +112,7 @@ export default function SchedulesPage() {
   const [isEditingCanteen, setIsEditingCanteen] = useState(false);
   const [canteenForm, setCanteenForm] = useState(defaultCanteenSchedule);
   const [isEditingGym, setIsEditingGym] = useState(false);
-  const [gymForm, setGymForm] = useState<GymSlot[]>(defaultGymSchedule);
+  const [gymForm, setGymForm] = useState<GymSlot[]>([]);
   const [isEditingBubble, setIsEditingBubble] = useState(false);
   const [bubbleForm, setBubbleForm] = useState<GymSlot[]>(defaultBubbleSchedule);
   const [status, setStatus] = useState("");
@@ -136,6 +123,42 @@ export default function SchedulesPage() {
     end: "",
     description: "",
   });
+
+  const { data: djangoGymEvents, isLoading: isDjangoLoading } = useQuery({
+    queryKey: ["django-gym-events"],
+    queryFn: fetchGymEvents,
+  });
+
+  const djangoGymSchedule = useMemo(() => {
+    if (!djangoGymEvents?.length) return [];
+
+    const grouped = new Map<string, GymSlot>();
+
+    for (const event of djangoGymEvents) {
+      const day = event.event?.day?.toUpperCase();
+      const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
+      const dayKey = day ? gymDayKeyMap[day] : undefined;
+
+      if (!dayKey) continue;
+
+      const existing = grouped.get(slotKey) ?? {
+        time: slotKey,
+        mon: "",
+        tue: "",
+        wed: "",
+        thu: "",
+        fri: "",
+        sat: "",
+        sun: "",
+      };
+
+      existing[dayKey] = event.gender ?? "";
+      grouped.set(slotKey, existing);
+    }
+
+    return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
+  }, [djangoGymEvents]);
+
   const facilities = useEvents({ type: "facility" });
   const canteenEvents = useMemo(
     () =>
@@ -155,7 +178,7 @@ export default function SchedulesPage() {
     [facilities.data],
   );
   const gymPrimaryEvent = gymEvents[0] ?? null;
-  const gymSchedule = parseGymSchedule(gymPrimaryEvent?.description);
+  const gymSchedule = djangoGymSchedule.length > 0 ? djangoGymSchedule : [];
 
   const bubbleEvents = useMemo(
     () =>
@@ -550,6 +573,7 @@ export default function SchedulesPage() {
 
       {activeTab === "Gym" && (
         <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6 overflow-x-auto">
+          {isDjangoLoading && <p className="text-sm text-slate-500">Loading gym endpoint data...</p>}
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Gym Weekly Schedule</h2>
             {isAdmin && !isEditingGym && (
