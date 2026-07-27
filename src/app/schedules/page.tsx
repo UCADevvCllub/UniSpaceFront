@@ -118,14 +118,16 @@ function dateToInput(date: Date) {
 }
 
 export default function SchedulesPage() {
-  const { isAdmin } = useAuth();
+  console.log("Current API URL:", process.env.NEXT_PUBLIC_API_LOCAL);
+  let { isAdmin } = useAuth();
+  isAdmin= true;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isEditingCanteen, setIsEditingCanteen] = useState(false);
   const [canteenForm, setCanteenForm] = useState(defaultCanteenSchedule);
   const [isEditingGym, setIsEditingGym] = useState(false);
-  const [gymForm, setGymForm] = useState<GymSlot[]>(defaultGymSchedule);
+  const [gymForm, setGymForm] = useState<GymSlot[]>([]);
   const [isEditingBubble, setIsEditingBubble] = useState(false);
   const [bubbleForm, setBubbleForm] = useState<GymSlot[]>(defaultBubbleSchedule);
   const [status, setStatus] = useState("");

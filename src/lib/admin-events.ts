@@ -22,37 +22,37 @@ interface ScheduleInput {
 }
 
 const eventsCollection = collection(db, "events");
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://web-production-4fa53e.up.railway.app";
 
 export async function createScheduleEvent(input: ScheduleInput) {
-  await addDoc(eventsCollection, {
+  const response = await axios.post(`${API_BASE_URL}/api/events/`, {
     title: input.title,
     type: input.type,
     location: input.location,
     group: input.group,
-    start: Timestamp.fromDate(input.start),
-    end: Timestamp.fromDate(input.end),
+    start: input.start.toISOString(), 
+    end: input.end.toISOString(),
     description: input.description,
-    createdAt: Timestamp.now(),
   });
+  return response.data;
 }
 
 export async function updateScheduleEvent(eventId: string, input: ScheduleInput) {
-  await updateDoc(doc(eventsCollection, eventId), {
+  const response = await axios.put(`${API_BASE_URL}/api/events/${eventId}/`, {
     title: input.title,
     type: input.type,
     location: input.location,
     group: input.group,
-    start: Timestamp.fromDate(input.start),
-    end: Timestamp.fromDate(input.end),
+    start: input.start.toISOString(),
+    end: input.end.toISOString(),
     description: input.description,
-    updatedAt: Timestamp.now(),
   });
+  return response.data;
 }
-
 export async function deleteScheduleEvent(eventId: string) {
-  await deleteDoc(doc(eventsCollection, eventId));
+  const response = await axios.delete(`${API_BASE_URL}/api/events/${eventId}/`);
+  return response.data;
 }
-
 
 export async function saveLessonToDjango(lesson: any) {
   const payload = {
