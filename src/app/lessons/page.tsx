@@ -1,4 +1,5 @@
 "use client";
+import axios from "axios";
 
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -9,9 +10,26 @@ import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { deleteClassEvent } from "@/lib/events";
+import { Trash2 } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
+
+import { 
+  fetchEvents, 
+  fetchSubjects, 
+  fetchInstructors, 
+  fetchRooms, 
+  fetchCohorts 
+} from "@/lib/events";
 // --- CONSTANTS ---
+
+
+
+
 const groups = ["Freshman", "Sophomore", "Junior", "Senior"] as const;
 type GroupLabel = (typeof groups)[number];
+
 
 const CALENDAR_START = 8 * 60;
 const CALENDAR_DURATION = (19 * 60) - CALENDAR_START;
@@ -30,30 +48,111 @@ const academicYearToId: Record<string, number> = {
   "Senior": 4
 };
 
+
+
 export default function LessonsPage() {
+
+
+  const { data: subjects } = useQuery({ queryKey: ["subjects"], queryFn: fetchSubjects });
+  const { data: instructors } = useQuery({ queryKey: ["instructors"], queryFn: fetchInstructors });
+  const { data: rooms } = useQuery({ queryKey: ["rooms"], queryFn: fetchRooms });
+  const { data: cohorts } = useQuery({ queryKey: ["cohorts"], queryFn: fetchCohorts });
+  const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents});
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    subject_id: "",
+    instructor_id: "",
+    cohort_id: "",
+    room_id: "",
+    day: "MON",
+    start_time: "09:00",
+    end_time: "10:30"
+  });
+
+
+
+  const [status, setStatus] = useState("");
+  const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
+
+
+// create button
+  const createMutation = useMutation({
+    mutationFn: async (newData: typeof formData) => {
+      const payload = {
+        subject_id: parseInt(newData.subject_id),
+        instructor_id: parseInt(newData.instructor_id),
+        cohort_id: parseInt(newData.cohort_id),
+        room_id: parseInt(newData.room_id),
+        event_data: {
+          day: newData.day,
+          start_time: newData.start_time + ":00", // Django wants HH:MM:SS
+          end_time: newData.end_time + ":00",
+          status: "CLASS"
+        }
+      };
+    return axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`, payload);
+    },
+
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
+      setIsModalOpen(false);
+      alert("Lesson created!");
+    },
+    onError: (error: any) => {
+  
+      const serverError = error.response?.data;
+      alert("Error: " + JSON.stringify(serverError));
+    }
+  });
+
+// delete button
+const deleteMutation = useMutation({
+  mutationFn: (id: string) => deleteClassEvent(id),
+  onSuccess: () => {
+    // re-fetch the list from Django
+    // refresher
+    queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
+    setStatus("Lesson deleted successfully");
+  },
+  onError: (error) => {
+    console.error("Delete failed:", error);
+    setStatus("Failed to delete lesson");
+  }
+  });
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this lesson?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+  
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
 
-  // 1. Fetch from Django
+
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-class-events"],
     queryFn: fetchClassEvents,
   });
 
 
-  const firebaseLessons = useEvents({ type: "lesson", group: activeGroup });
 
   const filteredSchedule = useMemo(() => {
     if (!djangoData) return [];
     const mapped = mapDjangoToUi(djangoData);
     const targetId = academicYearToId[activeGroup];
-    
-    // Debug log console
+
     const result = mapped.filter(item => item.yearId === targetId);
     console.log(`Filtering for ${activeGroup} (ID: ${targetId}). Found:`, result.length);
     return result;
   }, [djangoData, activeGroup]);
+  
+
 
   return (
+    <>
     <section className="space-y-4">
       <h1 className="text-2xl font-bold">Lessons</h1>
 
@@ -70,6 +169,12 @@ export default function LessonsPage() {
             {group}
           </button>
         ))}
+        <Button 
+    onClick={() => setIsModalOpen(true)}
+    className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+  >
+    <span className="text-lg">+</span> Add Lesson
+  </Button>
       </div>
 
 
@@ -122,10 +227,22 @@ export default function LessonsPage() {
                       const left = lesson.cohortColumn === 'Cohort 2' ? '50%' : '0%';
 
                       return (
-                        <div key={lesson.id} className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10" style={{ top: `${top}%`, height: `${height}%`, left, width: '50%' }}>
+                        <div key={lesson.id} className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 transition-all" style={{ top: `${top}%`, height: `${height}%`, left, width: '50%' }}>
                           <div className="text-[10px] font-bold truncate">{lesson.title}</div>
                           <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
                           <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
+                          {/* here */}
+                          {/* {isAdmin && ( */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation(); 
+                              handleDelete(lesson.id);
+                            }}
+                            className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                       
                         </div>
                       );
                     })}
@@ -140,5 +257,108 @@ export default function LessonsPage() {
         </Card>
       )}
     </section>
+   
+    {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
+            <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
+            
+            <div className="grid gap-4">
+              {/* Subject */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
+                <select 
+                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                  value={formData.subject_id}
+                  onChange={(e) => setFormData({...formData, subject_id: e.target.value})}
+                >
+                  <option value="">Select Subject</option>
+                  {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              {/* Instructor */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
+                <select 
+                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                  value={formData.instructor_id}
+                  onChange={(e) => setFormData({...formData, instructor_id: e.target.value})}
+                >
+                  <option value="">Select Instructor</option>
+                  {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
+                </select>
+              </div>
+
+              {/* Day & Room */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Day</label>
+                  <select 
+                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    value={formData.day}
+                    onChange={(e) => setFormData({...formData, day: e.target.value})}
+                  >
+                    <option value="MON">Monday</option>
+                    <option value="TUE">Tuesday</option>
+                    <option value="WED">Wednesday</option>
+                    <option value="THU">Thursday</option>
+                    <option value="FRI">Friday</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
+                  <select 
+                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    value={formData.room_id}
+                    onChange={(e) => setFormData({...formData, room_id: e.target.value})}
+                  >
+                    <option value="">Select Room</option>
+                    {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Time */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Start Time</label>
+                  <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.start_time} onChange={(e) => setFormData({...formData, start_time: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">End Time</label>
+                  <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.end_time} onChange={(e) => setFormData({...formData, end_time: e.target.value})} />
+                </div>
+              </div>
+
+              {/* Cohort */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
+                <select 
+                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                  value={formData.cohort_id}
+                  onChange={(e) => setFormData({...formData, cohort_id: e.target.value})}
+                >
+                  <option value="">Select Cohort</option>
+                  {cohorts?.map((c: any) => <option key={c.id} value={c.id}>{c.cohort_name} (Year: {c.study_year_id})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={() => createMutation.mutate(formData)}
+                disabled={createMutation.isPending}
+                className="bg-indigo-600 text-white"
+              >
+                {createMutation.isPending ? "Saving..." : "Save Lesson"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </>
+    
   );
 }

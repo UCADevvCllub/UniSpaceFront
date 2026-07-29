@@ -83,22 +83,69 @@ export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
 
 
 
-export async function fetchClassEvents() {
-  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
-  return response.data;
-}
 
-  // fetching bubble-event data from the endpoint
+// fetching bubble-event data from the endpoint
 
 export async function fetchBubbleEvents() {
   const responce = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`)
   return responce.data
 }
 
-  // fetching gym-event data from the endpoint
+// fetching gym-event data from the endpoint
 
 export async function fetchGymEvents() {
   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`);
+  return response.data;
+}
+
+
+// my section
+
+
+// options
+export const fetchSubjects = () => 
+  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/subject-entries/`).then(res => res.data);
+
+export const fetchInstructors = () => 
+  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/instructor-entries/`).then(res => res.data);
+
+export const fetchRooms = () => 
+  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/room-entries/`).then(res => res.data);
+
+export const fetchCohorts = () => 
+  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/cohort-entries/`).then(res => res.data);
+
+export async function fetchEvents() {
+  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
+  return response.data;
+}
+
+export async function createClassEvent(data: any) {
+  const payload = {
+    subject_id: data.subjectId,
+    instructor_id: data.instructorId,
+    cohort_id: data.cohortId,
+    room_id: data.roomId,
+    event_data: {
+      day: data.day, // 'MON', 'TUE', etc.
+      start_time: data.startTime, // '09:00:00'
+      end_time: data.endTime,     // '10:30:00'
+      status: 'CLASS'
+    }
+  };
+  const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`, payload);
+  return response.data;
+}
+
+// all the classevents
+export async function fetchClassEvents() {
+  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
+  return response.data;
+}
+// deleto
+export async function deleteClassEvent(id: string) {
+
+  const response = await axios.delete(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/${id}/`);
   return response.data;
 }
 
@@ -119,21 +166,3 @@ export const dayMap: Record<string, string> = {
 
 
 // Django Backend API Connections (from Bruno Collection)
-
-
-// export async function fetchGymEvents() {
-//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/gym-events/`);
-//   return response.data;
-// }
-// export async function fetchBubbleEvents() {
-//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/bubble-events/`);
-//   return response.data;
-// }
-// export async function fetchMealTimes() {
-//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/meal-times/`);
-//   return response.data;
-// }
-// export async function fetchScheduleEntries(params?: { day?: string; course?: string; study_year?: string }) {
-//   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/schedule/`, { params });
-//   return response.data;
-// }
