@@ -88,14 +88,14 @@ export async function fetchClassEvents() {
   return response.data;
 }
 
-  // fetching bubble-event data from the endpoint
+// fetching bubble-event data from the endpoint
 
 export async function fetchBubbleEvents() {
   const responce = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`)
   return responce.data
 }
 
-  // fetching gym-event data from the endpoint
+// fetching gym-event data from the endpoint
 
 export async function fetchGymEvents() {
   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`);
@@ -111,6 +111,20 @@ export const dayMap: Record<string, string> = {
   'FRI': 'FRIDAY'
 };
 
+export async function createGymEventDjango(data: {
+  gender: string;
+  event_data: { day: string; start_time: string; end_time: string };
+}) {
+  const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`, data);
+  return response.data;
+}
+export async function createBubbleEventDjango(data: {
+  name: string;
+  event_data: { day: string; start_time: string; end_time: string };
+}) {
+  const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`, data);
+  return response.data;
+}
 
 
 

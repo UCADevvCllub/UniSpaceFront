@@ -10,7 +10,7 @@ import { useEvents } from "@/hooks/use-events";
 import { createScheduleEvent, deleteScheduleEvent, updateScheduleEvent } from "@/lib/admin-events";
 import { formatEventTime } from "@/lib/utils";
 import { fetchGymEvents } from "@/lib/events";
-import { fetchBubbleEvents } from "@/lib/events"
+import { fetchBubbleEvents, createGymEventDjango, createBubbleEventDjango } from "@/lib/events"
 
 const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
 type ScheduleTab = (typeof scheduleTabs)[number];
@@ -32,33 +32,6 @@ export type GymSlot = {
   sat: string;
   sun: string;
 };
-
-const defaultBubbleSchedule: GymSlot[] = [
-  { time: "10:00am - 11:00am", mon: "CLEANING & DISINFECTION", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "CLEANING & DISINFECTION", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "CLEANING & DISINFECTION", sat: "", sun: "" },
-  { time: "11:00am - 12:00pm", mon: "CLEANING & DISINFECTION", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "CLEANING & DISINFECTION", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "CLEANING & DISINFECTION", sat: "TENNIS", sun: "TENNIS" },
-  { time: "12:00pm - 1:00pm", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "TENNIS", sun: "TENNIS" },
-  { time: "1:00pm - 2:00pm", mon: "MCHS", tue: "", wed: "MCHS", thu: "", fri: "", sat: "", sun: "" },
-  { time: "2:00pm - 3:00pm", mon: "MCHS", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "MCHS", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "FOOTBALL FEMALE", sat: "JUDO GRAPPLING", sun: "JUDO GRAPPLING" },
-  { time: "3:00pm - 4:00pm", mon: "", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "FOOTBALL FEMALE", sat: "JUDO GRAPPLING", sun: "JUDO GRAPPLING" },
-  { time: "4:00pm - 5:00pm", mon: "", tue: "PHYSICAL EDUCATION", wed: "", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "CRICKET", sun: "FOOTBALL FEMALE" },
-  { time: "5:00pm - 6:00pm", mon: "PHYSICAL EDUCATION", tue: "PHYSICAL EDUCATION", wed: "JUDO GRAPPLING", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "CRICKET", sun: "FOOTBALL FEMALE" },
-  { time: "6:00pm - 7:00pm", mon: "UCA SECURITY", tue: "PHYSICAL EDUCATION", wed: "JUDO GRAPPLING", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "7:00pm - 8:00pm", mon: "UCA SECURITY", tue: "VOLLEYBALL", wed: "UCA FACULTY", thu: "BASKETBALL", fri: "UCA SECURITY", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "8:00pm - 9:00pm", mon: "UCA SECURITY", tue: "VOLLEYBALL", wed: "UCA FACULTY", thu: "BASKETBALL", fri: "UCA SECURITY", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "9:00pm - 10:00pm", mon: "CRICKET", tue: "BASKETBALL", wed: "FOOTBALL", thu: "VOLLEYBALL", fri: "FOOTBALL", sat: "BASKETBALL", sun: "MEP&KITCHEN" },
-  { time: "10:00pm - 11:30pm", mon: "CRICKET", tue: "BASKETBALL", wed: "FOOTBALL", thu: "VOLLEYBALL", fri: "FOOTBALL", sat: "BASKETBALL", sun: "MEP&KITCHEN" },
-];
-
-function parseBubbleSchedule(description?: string): GymSlot[] {
-  if (!description) return defaultBubbleSchedule;
-  try {
-    const parsed = JSON.parse(description);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    // ignore
-  }
-  return defaultBubbleSchedule;
-}
 
 function serializeCanteenSchedule(schedule: typeof defaultCanteenSchedule) {
   return [
@@ -105,8 +78,7 @@ const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
 };
 
 export default function SchedulesPage() {
-  console.log("Current API URL:", process.env.NEXT_PUBLIC_API_LOCAL);
-  const { isAdmin } = useAuth();
+  let { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -115,7 +87,7 @@ export default function SchedulesPage() {
   const [isEditingGym, setIsEditingGym] = useState(false);
   const [gymForm, setGymForm] = useState<GymSlot[]>([]);
   const [isEditingBubble, setIsEditingBubble] = useState(false);
-  const [bubbleForm, setBubbleForm] = useState<GymSlot[]>(defaultBubbleSchedule);
+  const [bubbleForm, setBubbleForm] = useState<GymSlot[]>([]);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -124,6 +96,9 @@ export default function SchedulesPage() {
     end: "",
     description: "",
   });
+
+  isAdmin = true
+
 
   // fetching bubble-event data from the endpoint
 
@@ -168,7 +143,7 @@ export default function SchedulesPage() {
     return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
   }, [djangoBubbleEvents]);
 
- // fetching gym-events data from the endpoint
+  // fetching gym-events data from the endpoint
 
   const { data: djangoGymEvents, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-gym-events"],
@@ -187,7 +162,7 @@ export default function SchedulesPage() {
       const day = event.event?.day?.toUpperCase();
       const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
       const dayKey = day ? gymDayKeyMap[day] : undefined;
-    
+
 
       if (!dayKey) continue;
 
@@ -219,7 +194,7 @@ export default function SchedulesPage() {
   );
   const canteenPrimaryEvent = canteenEvents[0] ?? null;
   const canteenSchedule = parseCanteenSchedule(canteenPrimaryEvent?.description);
-  
+
   const gymEvents = useMemo(
     () =>
       (facilities.data ?? [])
@@ -361,42 +336,46 @@ export default function SchedulesPage() {
     }
   };
 
+  const dayKeyToDjangoDay: Record<string, string> = {
+    mon: "MON",
+    tue: "TUE",
+    wed: "WED",
+    thu: "THU",
+    fri: "FRI",
+    sat: "SAT",
+    sun: "SUN",
+  };
   const saveGymSchedule = async () => {
     if (!isAdmin) return;
     try {
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 0, 0);
-      const description = JSON.stringify(gymForm);
-
-      if (gymPrimaryEvent) {
-        await updateScheduleEvent(gymPrimaryEvent.id, {
-          title: "Gym Schedule",
-          type: "facility",
-          location: "Gym",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      } else {
-        await createScheduleEvent({
-          title: "Gym Schedule",
-          type: "facility",
-          location: "Gym",
-          group: "All",
-          start,
-          end,
-          description,
-        });
+      // 1. Iterate through table slots and prepare payloads
+      const requests = [];
+      for (const slot of gymForm) {
+        if (!slot.time || !slot.time.includes("-")) continue;
+        const [startRaw, endRaw] = slot.time.split("-").map((t) => t.trim());
+        const startTime = `${startRaw}:00`;
+        const endTime = `${endRaw}:00`;
+        for (const dayKey of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const) {
+          const genderVal = slot[dayKey]?.trim();
+          if (!genderVal) continue; // Skip empty slots
+          requests.push(
+            createGymEventDjango({
+              gender: genderVal.toUpperCase(),
+              event_data: {
+                day: dayKeyToDjangoDay[dayKey],
+                start_time: startTime,
+                end_time: endTime,
+              },
+            })
+          );
+        }
       }
+      // 2. Submit requests to Django
+      await Promise.all(requests);
+      // 3. Invalidate React Query cache for Django Gym events
+      await queryClient.invalidateQueries({ queryKey: ["django-gym-events"] });
 
-      const duplicateEvents = gymEvents.slice(1);
-      await Promise.all(duplicateEvents.map((event) => deleteScheduleEvent(event.id)));
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      setStatus("Gym schedule updated successfully.");
+      setStatus("Gym schedule saved to Django successfully.");
       setIsEditingGym(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to save gym schedule.");
@@ -406,39 +385,32 @@ export default function SchedulesPage() {
   const saveBubbleSchedule = async () => {
     if (!isAdmin) return;
     try {
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 0, 0);
-      const description = JSON.stringify(bubbleForm);
-
-      if (bubblePrimaryEvent) {
-        await updateScheduleEvent(bubblePrimaryEvent.id, {
-          title: "Bubble Schedule",
-          type: "facility",
-          location: "Bubble",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      } else {
-        await createScheduleEvent({
-          title: "Bubble Schedule",
-          type: "facility",
-          location: "Bubble",
-          group: "All",
-          start,
-          end,
-          description,
-        });
+      const requests = [];
+      for (const slot of bubbleForm) {
+        if (!slot.time || !slot.time.includes("-")) continue;
+        const [startRaw, endRaw] = slot.time.split("-").map((t) => t.trim());
+        const startTime = `${startRaw}:00`;
+        const endTime = `${endRaw}:00`;
+        for (const dayKey of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const) {
+          const activityName = slot[dayKey]?.trim();
+          if (!activityName) continue; // Skip empty slots
+          requests.push(
+            createBubbleEventDjango({
+              name: activityName,
+              event_data: {
+                day: dayKeyToDjangoDay[dayKey],
+                start_time: startTime,
+                end_time: endTime,
+              },
+            })
+          );
+        }
       }
+      await Promise.all(requests);
+      // Invalidate Django Bubble query cache
+      await queryClient.invalidateQueries({ queryKey: ["django-bubble-events"] });
 
-      const duplicateEvents = bubbleEvents.slice(1);
-      await Promise.all(duplicateEvents.map((event) => deleteScheduleEvent(event.id)));
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      setStatus("Bubble schedule updated successfully.");
+      setStatus("Bubble schedule saved to Django successfully.");
       setIsEditingBubble(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to save bubble schedule.");
@@ -519,7 +491,7 @@ export default function SchedulesPage() {
       {activeTab === "Canteen" && (
         <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
           <h2 className="text-xl font-bold text-slate-900">Canteen Schedule</h2>
-          
+
           {isEditingCanteen ? (
             <div className="space-y-3">
               <label className="block text-sm text-slate-700">
