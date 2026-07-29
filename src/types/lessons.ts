@@ -9,3 +9,5 @@ export type FreshmanLesson = {
     room: string;
     studyYearId?: number; // The ID from Django's StudyYear table
   };
+
+ 

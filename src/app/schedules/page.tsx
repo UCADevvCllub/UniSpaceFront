@@ -78,7 +78,9 @@ const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
 };
 
 export default function SchedulesPage() {
+  console.log("Current API URL:", process.env.NEXT_PUBLIC_API_LOCAL);
   let { isAdmin } = useAuth();
+  isAdmin= true;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -96,8 +98,6 @@ export default function SchedulesPage() {
     end: "",
     description: "",
   });
-
-  isAdmin = true
 
 
   // fetching bubble-event data from the endpoint
