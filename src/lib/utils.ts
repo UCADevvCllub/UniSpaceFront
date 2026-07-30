@@ -46,6 +46,12 @@ export function mapDjangoToUi(djangoEvents: any[]): any[] {
     // Column logic: CS/Arts = Column 1, CM/Science = Column 2
     cohortColumn: ce.cohort_detail?.cohort_name === 'CS' ? 'Cohort 1' : 'Cohort 2',
     // THIS IS THE CRITICAL PART: Match the ID from your Django JSON
-    yearId: ce.cohort_detail?.study_year_id
+    yearId: ce.cohort_detail?.study_year_id,
+
+    // Raw data
+    subjectId: ce.subject_id,      
+    instructorId: ce.instructor_id,
+    roomId: ce.room_id,
+    cohortId: ce.cohort_id
   }));
 }

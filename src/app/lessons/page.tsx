@@ -1,6 +1,5 @@
 "use client";
 import axios from "axios";
-
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -12,9 +11,10 @@ import { useEvents } from "@/hooks/use-events";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteClassEvent } from "@/lib/events";
-import { Trash2 } from "lucide-react";
+import { updateClassEvent } from "@/lib/events";
+import { Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-
+import { reverseDayMap } from "@/lib/utils";
 import { 
   fetchEvents, 
   fetchSubjects, 
@@ -50,6 +50,7 @@ const academicYearToId: Record<string, number> = {
 
 
 
+
 export default function LessonsPage() {
 
 
@@ -75,8 +76,52 @@ export default function LessonsPage() {
   const [status, setStatus] = useState("");
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
 
 
+  const handleEditClick = (lesson: any) => {
+    setFormData({
+      subject_id: lesson.subjectId, // You'll need to ensure your mapped object has these IDs
+      instructor_id: lesson.instructorId,
+      cohort_id: lesson.cohortId,
+      room_id: lesson.roomId,
+      day: reverseDayMap[lesson.day] || "MON", 
+      start_time: lesson.startTime,
+      end_time: lesson.endTime
+    });
+    setEditingId(lesson.id);
+    setIsModalOpen(true);
+  };
+  
+  // Function to open modal for ADDING
+  const handleAddClick = () => {
+    setFormData({
+      subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
+      day: "MON", start_time: "09:00", end_time: "10:30"
+    });
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
+
+  // edite button
+
+  const updateMutation = useMutation({
+    // We now expect an object containing both the ID and the Data
+    mutationFn: ({ id, data }: { id: string, data: typeof formData }) => 
+      updateClassEvent(id, data),
+      
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
+      setIsModalOpen(false);
+      setEditingId(null); // IMPORTANT: Clear the ID
+      alert("Lesson updated successfully!");
+    },
+    onError: (error: any) => {
+      console.error("FULL ERROR:", error);
+      alert("Update failed! See console for details.");
+    }
+  });
 // create button
   const createMutation = useMutation({
     mutationFn: async (newData: typeof formData) => {
@@ -170,11 +215,10 @@ const deleteMutation = useMutation({
           </button>
         ))}
         <Button 
-    onClick={() => setIsModalOpen(true)}
-    className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
-  >
-    <span className="text-lg">+</span> Add Lesson
-  </Button>
+  onClick={handleAddClick} // <--- FIX: This calls setEditingId(null)
+  className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2" >
+  <span className="text-lg">+</span> Add Lesson
+</Button>
       </div>
 
 
@@ -231,7 +275,17 @@ const deleteMutation = useMutation({
                           <div className="text-[10px] font-bold truncate">{lesson.title}</div>
                           <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
                           <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
-                          {/* here */}
+
+                          
+                          <button onClick={(e) => {
+                              e.stopPropagation(); 
+                              handleEditClick(lesson); // Opens modal and fills it with THIS lesson's data
+                            }}
+                            className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          {/* delete */}
                           {/* {isAdmin && ( */}
                           <button 
                             onClick={(e) => {
@@ -347,13 +401,25 @@ const deleteMutation = useMutation({
 
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+
               <Button 
-                onClick={() => createMutation.mutate(formData)}
-                disabled={createMutation.isPending}
-                className="bg-indigo-600 text-white"
-              >
-                {createMutation.isPending ? "Saving..." : "Save Lesson"}
-              </Button>
+            onClick={() => {
+              if (editingId) {
+                // Pass both the ID and the form data
+                updateMutation.mutate({ id: editingId, data: formData });
+              } else {
+                createMutation.mutate(formData);
+              }
+            }}
+            // Fix: Check both mutation loading states
+            disabled={createMutation.isPending || updateMutation.isPending}
+            className="bg-indigo-600 text-white"
+          >
+            {editingId 
+              ? (updateMutation.isPending ? "Updating..." : "Update Lesson") 
+              : (createMutation.isPending ? "Saving..." : "Save Lesson")
+            }
+          </Button>
             </div>
           </Card>
         </div>

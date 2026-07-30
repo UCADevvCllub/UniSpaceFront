@@ -119,7 +119,7 @@ export async function fetchEvents() {
   const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
   return response.data;
 }
-
+// CREATE
 export async function createClassEvent(data: any) {
   const payload = {
     subject_id: data.subjectId,
@@ -136,6 +136,35 @@ export async function createClassEvent(data: any) {
   const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`, payload);
   return response.data;
 }
+
+// ADD
+
+export async function updateClassEvent(id: string, data: any) {
+  console.log("API CALL STARTING - ID:", id); // Check if this shows in console
+  
+  // We prepare the payload exactly how Django wants it
+  const payload = {
+    subject_id: parseInt(data.subject_id),
+    instructor_id: parseInt(data.instructor_id),
+    cohort_id: parseInt(data.cohort_id),
+    room_id: parseInt(data.room_id),
+    event_data: {
+      day: data.day, // This should already be 'MON', 'TUE' etc.
+      start_time: data.start_time.length === 5 ? data.start_time + ":00" : data.start_time,
+      end_time: data.end_time.length === 5 ? data.end_time + ":00" : data.end_time,
+      status: "CLASS"
+    }
+  };
+
+  console.log("PAYLOAD READY:", payload);
+
+  // Use the SAME variable you used for POST (NEXT_PUBLIC_API_LOCAL or NEXT_PUBLIC_API_URL)
+  const url = `${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/${id}/`;
+  
+  return axios.patch(url, payload);
+}
+
+
 
 // all the classevents
 export async function fetchClassEvents() {
