@@ -107,14 +107,14 @@ export default function LessonsPage() {
   // edite button
 
   const updateMutation = useMutation({
-    // We now expect an object containing both the ID and the Data
+    //object containing both the ID and the Data
     mutationFn: ({ id, data }: { id: string, data: typeof formData }) => 
       updateClassEvent(id, data),
       
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
       setIsModalOpen(false);
-      setEditingId(null); // IMPORTANT: Clear the ID
+      setEditingId(null); 
       alert("Lesson updated successfully!");
     },
     onError: (error: any) => {
@@ -132,7 +132,7 @@ export default function LessonsPage() {
         room_id: parseInt(newData.room_id),
         event_data: {
           day: newData.day,
-          start_time: newData.start_time + ":00", // Django wants HH:MM:SS
+          start_time: newData.start_time + ":00", 
           end_time: newData.end_time + ":00",
           status: "CLASS"
         }
@@ -157,7 +157,6 @@ export default function LessonsPage() {
 const deleteMutation = useMutation({
   mutationFn: (id: string) => deleteClassEvent(id),
   onSuccess: () => {
-    // re-fetch the list from Django
     // refresher
     queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
     setStatus("Lesson deleted successfully");
@@ -279,7 +278,7 @@ const deleteMutation = useMutation({
                           
                           <button onClick={(e) => {
                               e.stopPropagation(); 
-                              handleEditClick(lesson); // Opens modal and fills it with THIS lesson's data
+                              handleEditClick(lesson); 
                             }}
                             className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
                           >
@@ -405,13 +404,13 @@ const deleteMutation = useMutation({
               <Button 
             onClick={() => {
               if (editingId) {
-                // Pass both the ID and the form data
+                // Pass ID and the form data
                 updateMutation.mutate({ id: editingId, data: formData });
               } else {
                 createMutation.mutate(formData);
               }
             }}
-            // Fix: Check both mutation loading states
+            // Check mutation loading states
             disabled={createMutation.isPending || updateMutation.isPending}
             className="bg-indigo-600 text-white"
           >
