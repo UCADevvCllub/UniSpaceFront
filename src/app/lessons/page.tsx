@@ -83,7 +83,7 @@ export default function LessonsPage() {
 
   const handleEditClick = (lesson: any) => {
     setFormData({
-      subject_id: lesson.subjectId, // You'll need to ensure your mapped object has these IDs
+      subject_id: lesson.subjectId, 
       instructor_id: lesson.instructorId,
       cohort_id: lesson.cohortId,
       room_id: lesson.roomId,
@@ -100,6 +100,33 @@ export default function LessonsPage() {
     setFormData({
       subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
       day: "MON", start_time: "09:00", end_time: "10:30"
+    });
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
+  // Converts a raw minutes-from-midnight value into a clamped, 15-min-snapped "HH:MM"
+  const minutesToTimeStr = (totalMinutes: number) => {
+    const clamped = Math.max(CALENDAR_START, Math.min(totalMinutes, CALENDAR_START + CALENDAR_DURATION));
+    const snapped = Math.round(clamped / 15) * 15;
+    const hh = String(Math.floor(snapped / 60)).padStart(2, "0");
+    const mm = String(snapped % 60).padStart(2, "0");
+    return `${hh}:${mm}`;
+  };
+
+  // Opens the Add Lesson modal pre-filled with the day/time clicked on the calendar grid
+  const handleSlotClick = (dayFull: string, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const minutesFromStart = (offsetY / rect.height) * CALENDAR_DURATION;
+    const startTime = minutesToTimeStr(CALENDAR_START + minutesFromStart);
+    const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
+
+    setFormData({
+      subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
+      day: reverseDayMap[dayFull] || "MON",
+      start_time: startTime,
+      end_time: endTime,
     });
     setEditingId(null);
     setIsModalOpen(true);
@@ -262,7 +289,11 @@ const deleteMutation = useMutation({
 
                 {/* Day Columns */}
                 {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
-                  <div key={day} className="border-r border-slate-100 relative last:border-r-0">
+                  <div
+                    key={day}
+                    className="border-r border-slate-100 relative last:border-r-0 cursor-pointer"
+                    onClick={(e) => handleSlotClick(day, e)}
+                  >
                     {/* Hour Lines */}
                     {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="absolute w-full border-t border-slate-100" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
@@ -277,7 +308,12 @@ const deleteMutation = useMutation({
                       const left = lesson.cohortColumn === 'Cohort 2' ? '50%' : '0%';
 
                       return (
-                        <div key={lesson.id} className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 transition-all" style={{ top: `${top}%`, height: `${height}%`, left, width: '50%' }}>
+                        <div
+                          key={lesson.id}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 transition-all"
+                          style={{ top: `${top}%`, height: `${height}%`, left, width: '50%' }}
+                        >
                           <div className="text-[10px] font-bold truncate">{lesson.title}</div>
                           <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
                           <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
