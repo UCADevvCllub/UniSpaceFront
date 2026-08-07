@@ -195,3 +195,4 @@ export const dayMap: Record<string, string> = {
 
 
 // Django Backend API Connections (from Bruno Collection)
+

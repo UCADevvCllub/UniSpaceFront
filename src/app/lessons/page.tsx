@@ -9,12 +9,14 @@ import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
 
+import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteClassEvent } from "@/lib/events";
 import { updateClassEvent } from "@/lib/events";
 import { Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { reverseDayMap } from "@/lib/utils";
+import { toast, Toaster } from "sonner";
 import { 
   fetchEvents, 
   fetchSubjects, 
@@ -115,11 +117,14 @@ export default function LessonsPage() {
       queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
       setIsModalOpen(false);
       setEditingId(null); 
-      alert("Lesson updated successfully!");
+      toast.success("Lesson updated successfully", {
+        description: "The schedule has been updated.",
+      });
     },
     onError: (error: any) => {
-      console.error("FULL ERROR:", error);
-      alert("Update failed! See console for details.");
+      toast.error("Could not update lesson", {
+        description: "There might be a Lesson conflict.",
+      });
     }
   });
 // create button
@@ -144,12 +149,14 @@ export default function LessonsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
       setIsModalOpen(false);
-      alert("Lesson created!");
+      toast.success("Lesson created successfully", {
+        description: "The Lesson has been created.",
+      });
     },
     onError: (error: any) => {
-  
-      const serverError = error.response?.data;
-      alert("Error: " + JSON.stringify(serverError));
+      toast.error("Could not create lesson", {
+        description: "There might be a Lesson conflict.",
+      });
     }
   });
 
@@ -310,9 +317,33 @@ const deleteMutation = useMutation({
         </Card>
       )}
     </section>
-   
+
+    <Toaster position="bottom-right" richColors />
+
+   {/* reponsible for the panel that appears */}
+   <AnimatePresence>
     {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0  flex items-center justify-center z-[100] p-4">
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsModalOpen(false)} // Close when clicking outside
+            className="fixed inset-0"
+          />
+           
+           {/* 4. THE PANEL (Pops and Scales in) */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}    
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}    
+            transition={{ type: "spring", damping: 25, stiffness: 400 }} 
+            className="w-full max-w-md z-10"
+          >
+
+           
+
           <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
             <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
             
@@ -421,8 +452,10 @@ const deleteMutation = useMutation({
           </Button>
             </div>
           </Card>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
     </>
     
   );
