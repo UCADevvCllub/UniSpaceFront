@@ -1,6 +1,6 @@
 "use client";
 import axios from "axios";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteClassEvent } from "@/lib/events";
 import { updateClassEvent } from "@/lib/events";
@@ -35,12 +35,43 @@ type GroupLabel = (typeof groups)[number];
 
 const CALENDAR_START = 8 * 60;
 const CALENDAR_DURATION = (19 * 60) - CALENDAR_START;
+const DAY_ORDER = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
 
 const timeToMinutes = (time: string) => {
   if (!time) return 0;
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 };
+
+// Converts a raw minutes-from-midnight value into a clamped "HH:MM", snapped to snapMinutes
+const minutesToTimeStr = (totalMinutes: number, snapMinutes: number = 15) => {
+  const clamped = Math.max(CALENDAR_START, Math.min(totalMinutes, CALENDAR_START + CALENDAR_DURATION));
+  const snapped = Math.round(clamped / snapMinutes) * snapMinutes;
+  const hh = String(Math.floor(snapped / 60)).padStart(2, "0");
+  const mm = String(snapped % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+};
+
+// Given a drag's current pointer position and where on the card it was grabbed,
+// resolves the day column + 5-min-snapped time the card's top-left corner now implies.
+type DragStart = { grabOffsetX: number; grabOffsetY: number; columnRect: DOMRect };
+
+function resolveSnappedTarget(lesson: any, info: PanInfo, dragStart: DragStart) {
+  const impliedTopPx = info.point.y - dragStart.grabOffsetY;
+  const impliedLeftPx = info.point.x - dragStart.grabOffsetX;
+
+  const originIndex = DAY_ORDER.indexOf(lesson.day);
+  const baseLeftFraction = lesson.cohortColumn === "Cohort 2" ? 0.5 : 0;
+  const originCardLeftPx = dragStart.columnRect.left + baseLeftFraction * dragStart.columnRect.width;
+  const deltaColumns = Math.round((impliedLeftPx - originCardLeftPx) / dragStart.columnRect.width);
+  const targetIndex = Math.min(DAY_ORDER.length - 1, Math.max(0, originIndex + deltaColumns));
+  const dayFull = DAY_ORDER[targetIndex];
+
+  const minutesFromStart = ((impliedTopPx - dragStart.columnRect.top) / dragStart.columnRect.height) * CALENDAR_DURATION;
+  const time = minutesToTimeStr(CALENDAR_START + minutesFromStart, 5);
+
+  return { dayFull, time };
+}
 
 
 const academicYearToId: Record<string, number> = {
@@ -105,15 +136,6 @@ export default function LessonsPage() {
     setIsModalOpen(true);
   };
 
-  // Converts a raw minutes-from-midnight value into a clamped, 15-min-snapped "HH:MM"
-  const minutesToTimeStr = (totalMinutes: number) => {
-    const clamped = Math.max(CALENDAR_START, Math.min(totalMinutes, CALENDAR_START + CALENDAR_DURATION));
-    const snapped = Math.round(clamped / 15) * 15;
-    const hh = String(Math.floor(snapped / 60)).padStart(2, "0");
-    const mm = String(snapped % 60).padStart(2, "0");
-    return `${hh}:${mm}`;
-  };
-
   // Opens the Add Lesson modal pre-filled with the day/time clicked on the calendar grid
   const handleSlotClick = (dayFull: string, e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -130,6 +152,38 @@ export default function LessonsPage() {
     });
     setEditingId(null);
     setIsModalOpen(true);
+  };
+
+  // Applies an already-resolved (day, time) drop target to a lesson via the update mutation.
+  // onRejected fires only if the backend rejects the move (e.g. a conflict), so the card can
+  // snap back — on success the card just stays where it was dropped, no revert needed.
+  const applyLessonMove = (
+    lesson: any,
+    target: { dayFull: string; time: string },
+    onRejected?: () => void,
+  ) => {
+    const newDay = reverseDayMap[target.dayFull] || lesson.day;
+    const oldDay = reverseDayMap[lesson.day] || lesson.day;
+    if (newDay === oldDay && target.time === lesson.startTime) return; // dropped back where it started
+
+    const duration = timeToMinutes(lesson.endTime) - timeToMinutes(lesson.startTime);
+    const newEnd = minutesToTimeStr(timeToMinutes(target.time) + duration, 5);
+
+    updateMutation.mutate(
+      {
+        id: lesson.id,
+        data: {
+          subject_id: lesson.subjectId,
+          instructor_id: lesson.instructorId,
+          cohort_id: lesson.cohortId,
+          room_id: lesson.roomId,
+          day: newDay,
+          start_time: target.time,
+          end_time: newEnd,
+        },
+      },
+      { onError: () => onRejected?.() },
+    );
   };
 
 
@@ -291,6 +345,7 @@ const deleteMutation = useMutation({
                 {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
                   <div
                     key={day}
+                    data-day={day}
                     className="border-r border-slate-100 relative last:border-r-0 cursor-pointer"
                     onClick={(e) => handleSlotClick(day, e)}
                   >
@@ -300,48 +355,15 @@ const deleteMutation = useMutation({
                     ))}
 
                     {/* Lessons */}
-                    {filteredSchedule.filter(l => l.day === day).map(lesson => {
-                      const startMins = timeToMinutes(lesson.startTime);
-                      const endMins = timeToMinutes(lesson.endTime);
-                      const top = ((startMins - CALENDAR_START) / CALENDAR_DURATION) * 100;
-                      const height = ((endMins - startMins) / CALENDAR_DURATION) * 100;
-                      const left = lesson.cohortColumn === 'Cohort 2' ? '50%' : '0%';
-
-                      return (
-                        <div
-                          key={lesson.id}
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 transition-all"
-                          style={{ top: `${top}%`, height: `${height}%`, left, width: '50%' }}
-                        >
-                          <div className="text-[10px] font-bold truncate">{lesson.title}</div>
-                          <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
-                          <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
-
-                          
-                          <button onClick={(e) => {
-                              e.stopPropagation(); 
-                              handleEditClick(lesson); 
-                            }}
-                            className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          {/* delete */}
-                          {/* {isAdmin && ( */}
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation(); 
-                              handleDelete(lesson.id);
-                            }}
-                            className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                       
-                        </div>
-                      );
-                    })}
+                    {filteredSchedule.filter(l => l.day === day).map(lesson => (
+                      <LessonCard
+                        key={lesson.id}
+                        lesson={lesson}
+                        onEdit={handleEditClick}
+                        onDelete={handleDelete}
+                        onMove={applyLessonMove}
+                      />
+                    ))}
                   </div>
                 ))}
               </div>
@@ -493,6 +515,110 @@ const deleteMutation = useMutation({
       )}
       </AnimatePresence>
     </>
-    
+
+  );
+}
+
+// Renders one lesson block on the calendar grid. Owns its own drag motion values (dragX/dragY)
+// so it can override Framer Motion's raw drag output with a precise, grid-snapped position on
+// every move — anchored to the card's own top-left corner (via the grab offset recorded on
+// drag start), not the raw cursor position.
+function LessonCard({
+  lesson,
+  onEdit,
+  onDelete,
+  onMove,
+}: {
+  lesson: any;
+  onEdit: (lesson: any) => void;
+  onDelete: (id: string) => void;
+  onMove: (lesson: any, target: { dayFull: string; time: string }, onRejected?: () => void) => void;
+}) {
+  const dragStartRef = useRef<DragStart | null>(null);
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+
+  const startMins = timeToMinutes(lesson.startTime);
+  const endMins = timeToMinutes(lesson.endTime);
+  const top = ((startMins - CALENDAR_START) / CALENDAR_DURATION) * 100;
+  const height = ((endMins - startMins) / CALENDAR_DURATION) * 100;
+  const left = lesson.cohortColumn === "Cohort 2" ? "50%" : "0%";
+
+  // Once the lesson's real data catches up to a successful move, the base top/left already
+  // matches where the card was dropped — reset the drag offset then, before paint, so there's
+  // no visible jump. A rejected move resets immediately instead, via onMove's onRejected.
+  useLayoutEffect(() => {
+    dragX.set(0);
+    dragY.set(0);
+  }, [lesson.day, lesson.startTime, lesson.cohortColumn, dragX, dragY]);
+
+  return (
+    <motion.div
+      drag
+      dragMomentum={false}
+      style={{ top: `${top}%`, height: `${height}%`, left, width: "50%", x: dragX, y: dragY }}
+      onDragStart={(event, info) => {
+        const columnEl = document.querySelector(`[data-day="${lesson.day}"]`);
+        if (!(columnEl instanceof HTMLElement)) return;
+        const columnRect = columnEl.getBoundingClientRect();
+        const cardTopPx = columnRect.top + (top / 100) * columnRect.height;
+        const cardLeftPx = columnRect.left + (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0) * columnRect.width;
+        dragStartRef.current = {
+          grabOffsetX: info.point.x - cardLeftPx,
+          grabOffsetY: info.point.y - cardTopPx,
+          columnRect,
+        };
+      }}
+      onDrag={(event, info) => {
+        if (!dragStartRef.current) return;
+        const target = resolveSnappedTarget(lesson, info, dragStartRef.current);
+        const snappedTopPercent = ((timeToMinutes(target.time) - CALENDAR_START) / CALENDAR_DURATION) * 100;
+        const dayShift = DAY_ORDER.indexOf(target.dayFull) - DAY_ORDER.indexOf(lesson.day);
+        dragY.set(((snappedTopPercent - top) / 100) * dragStartRef.current.columnRect.height);
+        dragX.set(dayShift * dragStartRef.current.columnRect.width);
+      }}
+      onDragEnd={(event, info) => {
+        const dragStart = dragStartRef.current;
+        dragStartRef.current = null;
+        if (!dragStart) {
+          dragX.set(0);
+          dragY.set(0);
+          return;
+        }
+        // Stay exactly where it was dropped — don't reset here. The layout effect above
+        // clears the offset once the real data catches up (success), or onRejected below
+        // clears it immediately if the backend rejects the move.
+        const target = resolveSnappedTarget(lesson, info, dragStart);
+        onMove(lesson, target, () => {
+          dragX.set(0);
+          dragY.set(0);
+        });
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 cursor-grab active:cursor-grabbing active:z-30"
+    >
+      <div className="text-[10px] font-bold truncate">{lesson.title}</div>
+      <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
+      <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit(lesson);
+        }}
+        className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
+      >
+        <Pencil size={12} />
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(lesson.id);
+        }}
+        className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Trash2 size={14} />
+      </button>
+    </motion.div>
   );
 }
