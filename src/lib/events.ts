@@ -14,6 +14,14 @@ import { CampusEvent, EventType } from "@/types/event";
 
 const eventsCollection = collection(db, "events");
 
+export const CANTEEN_SCHEDULE = {
+  breakfastWeekday: "8:00 AM - 9:30 AM",
+  breakfastWeekend: "10:00 AM",
+  lunch: "12:00 PM - 2:00 PM",
+  dinner: "6:00 PM - 8:00 PM",
+} as const;
+
+
 function hasValidTimestamp(value: unknown): value is { toDate: () => Date; toMillis: () => number } {
   return (
     typeof value === "object" &&
@@ -103,16 +111,16 @@ export async function fetchGymEvents() {
 
 
 // options
-export const fetchSubjects = () => 
+export const fetchSubjects = () =>
   axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/subject-entries/`).then(res => res.data);
 
-export const fetchInstructors = () => 
+export const fetchInstructors = () =>
   axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/instructor-entries/`).then(res => res.data);
 
-export const fetchRooms = () => 
+export const fetchRooms = () =>
   axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/room-entries/`).then(res => res.data);
 
-export const fetchCohorts = () => 
+export const fetchCohorts = () =>
   axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/cohort-entries/`).then(res => res.data);
 
 export async function fetchEvents() {
@@ -165,11 +173,38 @@ export async function createGymEventDjango(data: {
   const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`, data);
   return response.data;
 }
+
+export async function patchGymEventDjango(
+  id: number | string,
+  data: Partial<{ gender: string; event_data: Partial<{ day: string; start_time: string; end_time: string }> }>
+) {
+  const response = await axios.patch(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/${id}/`, data);
+  return response.data;
+}
+
+export async function deleteGymEventDjango(id: number | string) {
+  const response = await axios.delete(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/${id}/`);
+  return response.data;
+}
+
 export async function createBubbleEventDjango(data: {
   name: string;
   event_data: { day: string; start_time: string; end_time: string };
 }) {
   const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`, data);
+  return response.data;
+}
+
+export async function patchBubbleEventDjango(
+  id: number | string,
+  data: Partial<{ name: string; event_data: Partial<{ day: string; start_time: string; end_time: string }> }>
+) {
+  const response = await axios.patch(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/${id}/`, data);
+  return response.data;
+}
+
+export async function deleteBubbleEventDjango(id: number | string) {
+  const response = await axios.delete(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/${id}/`);
   return response.data;
 }
 

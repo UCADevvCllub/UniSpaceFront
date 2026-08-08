@@ -12,6 +12,9 @@ interface CustomUser {
   email?: string;
   first_name?: string;
   last_name?: string;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  role?: string;
 }
 
 interface AuthContextValue {
@@ -60,10 +63,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.email]);
 
   const isAdmin = useMemo(() => {
-    const email = user?.email?.toLowerCase();
-    if (!email) return false;
-    return ADMIN_EMAILS.includes(email);
-  }, [user?.email]);
+    if (!user) return false;
+    if (user.is_staff || user.is_superuser || user.role === "admin") return true;
+    const email = user.email?.toLowerCase();
+    if (email && ADMIN_EMAILS.includes(email)) return true;
+    return false;
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, logOut, classYear, isAdmin }}>
