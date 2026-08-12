@@ -73,6 +73,34 @@ function resolveSnappedTarget(lesson: any, info: PanInfo, dragStart: DragStart) 
   return { dayFull, time };
 }
 
+const MIN_LESSON_MINUTES = 30;
+
+const percentOfCalendar = (min: number) => ((min - CALENDAR_START) / CALENDAR_DURATION) * 100;
+
+const formatMinutes = (min: number) => {
+  const hh = String(Math.floor(min / 60)).padStart(2, "0");
+  const mm = String(min % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+};
+
+// 5-min snap, clamped between min/max (used to enforce the 30-min minimum duration)
+const snapResizeMinutes = (raw: number, min: number, max: number) => {
+  const snapped = Math.round(raw / 5) * 5;
+  return Math.max(min, Math.min(snapped, max));
+};
+
+type ResizeStart = { edge: "start" | "end"; pointerStartY: number; originStartMin: number; originEndMin: number; columnHeight: number };
+
+function computeResizePreview(lesson: any, rs: ResizeStart, info: PanInfo) {
+  const deltaMinutes = ((info.point.y - rs.pointerStartY) / rs.columnHeight) * CALENDAR_DURATION;
+  if (rs.edge === "start") {
+    const min = snapResizeMinutes(rs.originStartMin + deltaMinutes, CALENDAR_START, rs.originEndMin - MIN_LESSON_MINUTES);
+    return { start_time: formatMinutes(min), end_time: lesson.endTime };
+  }
+  const min = snapResizeMinutes(rs.originEndMin + deltaMinutes, rs.originStartMin + MIN_LESSON_MINUTES, CALENDAR_START + CALENDAR_DURATION);
+  return { start_time: lesson.startTime, end_time: formatMinutes(min) };
+}
+
 
 const academicYearToId: Record<string, number> = {
   "Freshman": 1,
@@ -91,6 +119,14 @@ export default function LessonsPage() {
   const { data: instructors } = useQuery({ queryKey: ["instructors"], queryFn: fetchInstructors });
   const { data: rooms } = useQuery({ queryKey: ["rooms"], queryFn: fetchRooms });
   const { data: cohorts } = useQuery({ queryKey: ["cohorts"], queryFn: fetchCohorts });
+  // Groups the cohort dropdown by study year (Freshman -> Senior), CS before CM within each year
+  const sortedCohorts = useMemo(() => {
+    if (!cohorts) return [];
+    return [...cohorts].sort((a: any, b: any) => {
+      if (a.study_year_id !== b.study_year_id) return a.study_year_id - b.study_year_id;
+      return a.cohort_name === "CS" ? -1 : b.cohort_name === "CS" ? 1 : 0;
+    });
+  }, [cohorts]);
   const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents});
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -136,16 +172,25 @@ export default function LessonsPage() {
     setIsModalOpen(true);
   };
 
-  // Opens the Add Lesson modal pre-filled with the day/time clicked on the calendar grid
+  // Opens the Add Lesson modal pre-filled with the day/time/cohort clicked on the calendar grid
   const handleSlotClick = (dayFull: string, e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
     const minutesFromStart = (offsetY / rect.height) * CALENDAR_DURATION;
     const startTime = minutesToTimeStr(CALENDAR_START + minutesFromStart);
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
+    // left half = CS, right half = CM, within the active tab's study year
+    const isCsHalf = offsetX < rect.width / 2;
+    const studyYearId = academicYearToId[activeGroup];
+    const cohort = sortedCohorts.find(
+      (c: any) => c.study_year_id === studyYearId && (c.cohort_name === "CS") === isCsHalf,
+    );
+
     setFormData({
-      subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
+      subject_id: "", instructor_id: "", room_id: "",
+      cohort_id: cohort ? String(cohort.id) : "",
       day: reverseDayMap[dayFull] || "MON",
       start_time: startTime,
       end_time: endTime,
@@ -154,9 +199,30 @@ export default function LessonsPage() {
     setIsModalOpen(true);
   };
 
-  // Applies an already-resolved (day, time) drop target to a lesson via the update mutation.
-  // onRejected fires only if the backend rejects the move (e.g. a conflict), so the card can
-  // snap back — on success the card just stays where it was dropped, no revert needed.
+  // Shared save path for both moving and resizing a lesson. onRejected fires only if the
+  // backend rejects it (e.g. a conflict), so the card can snap back — on success it just
+  // stays put, no revert needed.
+  const patchLesson = (
+    lesson: any,
+    patch: { day: string; start_time: string; end_time: string },
+    onRejected?: () => void,
+  ) => {
+    updateMutation.mutate(
+      {
+        id: lesson.id,
+        data: {
+          subject_id: lesson.subjectId,
+          instructor_id: lesson.instructorId,
+          cohort_id: lesson.cohortId,
+          room_id: lesson.roomId,
+          ...patch,
+        },
+      },
+      { onError: () => onRejected?.() },
+    );
+  };
+
+  // Applies an already-resolved (day, time) drop target to a lesson
   const applyLessonMove = (
     lesson: any,
     target: { dayFull: string; time: string },
@@ -168,22 +234,20 @@ export default function LessonsPage() {
 
     const duration = timeToMinutes(lesson.endTime) - timeToMinutes(lesson.startTime);
     const newEnd = minutesToTimeStr(timeToMinutes(target.time) + duration, 5);
+    patchLesson(lesson, { day: newDay, start_time: target.time, end_time: newEnd }, onRejected);
+  };
 
-    updateMutation.mutate(
-      {
-        id: lesson.id,
-        data: {
-          subject_id: lesson.subjectId,
-          instructor_id: lesson.instructorId,
-          cohort_id: lesson.cohortId,
-          room_id: lesson.roomId,
-          day: newDay,
-          start_time: target.time,
-          end_time: newEnd,
-        },
-      },
-      { onError: () => onRejected?.() },
-    );
+  // Applies a resized start or end time to a lesson, day/other edge unchanged
+  const applyLessonResize = (
+    lesson: any,
+    edge: "start" | "end",
+    newTime: string,
+    onRejected?: () => void,
+  ) => {
+    const start_time = edge === "start" ? newTime : lesson.startTime;
+    const end_time = edge === "end" ? newTime : lesson.endTime;
+    if (start_time === lesson.startTime && end_time === lesson.endTime) return;
+    patchLesson(lesson, { day: reverseDayMap[lesson.day] || lesson.day, start_time, end_time }, onRejected);
   };
 
 
@@ -324,7 +388,7 @@ const deleteMutation = useMutation({
                   <div key={day} className="p-3 border-r border-slate-200 text-center last:border-r-0">
                     <div className="font-bold text-slate-700">{day}</div>
                     <div className="grid grid-cols-2 text-[9px] font-bold text-slate-400 mt-1">
-                      <div>CS / Arts</div><div>CM / Science</div>
+                      <div>CS / Science</div><div>CM / Arts</div>
                     </div>
                   </div>
                 ))}
@@ -362,6 +426,7 @@ const deleteMutation = useMutation({
                         onEdit={handleEditClick}
                         onDelete={handleDelete}
                         onMove={applyLessonMove}
+                        onResize={applyLessonResize}
                       />
                     ))}
                   </div>
@@ -482,7 +547,7 @@ const deleteMutation = useMutation({
                   onChange={(e) => setFormData({...formData, cohort_id: e.target.value})}
                 >
                   <option value="">Select Cohort</option>
-                  {cohorts?.map((c: any) => <option key={c.id} value={c.id}>{c.cohort_name} (Year: {c.study_year_id})</option>)}
+                  {sortedCohorts.map((c: any) => <option key={c.id} value={c.id}>{c.cohort_name} (Year: {c.study_year_id})</option>)}
                 </select>
               </div>
             </div>
@@ -528,35 +593,57 @@ function LessonCard({
   onEdit,
   onDelete,
   onMove,
+  onResize,
 }: {
   lesson: any;
   onEdit: (lesson: any) => void;
   onDelete: (id: string) => void;
   onMove: (lesson: any, target: { dayFull: string; time: string }, onRejected?: () => void) => void;
+  onResize: (lesson: any, edge: "start" | "end", newTime: string, onRejected?: () => void) => void;
 }) {
   const dragStartRef = useRef<DragStart | null>(null);
   const dragX = useMotionValue(0);
   const dragY = useMotionValue(0);
+  const resizeStartRef = useRef<ResizeStart | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ start_time: string; end_time: string } | null>(null);
+  const [resizingEdge, setResizingEdge] = useState<"start" | "end" | null>(null);
+  // Kept pinned at 0 always — the card's own height/top does the visual resizing;
+  // these just stop Framer's default drag transform from also moving the handle itself.
+  const startHandleY = useMotionValue(0);
+  const endHandleY = useMotionValue(0);
 
+  // Live text label only — position/size for rendering comes from topMV/heightMV below,
+  // kept on the same synchronous motion-value pipeline as the handles so they never drift
+  // apart during a drag (React state re-renders are a beat slower than motion value writes).
+  const effectiveStart = resizePreview?.start_time ?? lesson.startTime;
+  const effectiveEnd = resizePreview?.end_time ?? lesson.endTime;
   const startMins = timeToMinutes(lesson.startTime);
   const endMins = timeToMinutes(lesson.endTime);
-  const top = ((startMins - CALENDAR_START) / CALENDAR_DURATION) * 100;
-  const height = ((endMins - startMins) / CALENDAR_DURATION) * 100;
+  const top = percentOfCalendar(startMins);
+  const height = percentOfCalendar(endMins) - percentOfCalendar(startMins);
   const left = lesson.cohortColumn === "Cohort 2" ? "50%" : "0%";
 
-  // Once the lesson's real data catches up to a successful move, the base top/left already
-  // matches where the card was dropped — reset the drag offset then, before paint, so there's
-  // no visible jump. A rejected move resets immediately instead, via onMove's onRejected.
+  const topMV = useMotionValue(`${top}%`);
+  const heightMV = useMotionValue(`${height}%`);
+
+  // Once the lesson's real data catches up (move or resize succeeded), the base top/height
+  // already matches — reset here, before paint, so there's no visible jump. A rejected
+  // move/resize resets immediately instead, via the respective onRejected callback.
   useLayoutEffect(() => {
     dragX.set(0);
     dragY.set(0);
-  }, [lesson.day, lesson.startTime, lesson.cohortColumn, dragX, dragY]);
+    startHandleY.set(0);
+    endHandleY.set(0);
+    topMV.set(`${top}%`);
+    heightMV.set(`${height}%`);
+    setResizePreview(null);
+  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.cohortColumn, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
 
   return (
     <motion.div
       drag
       dragMomentum={false}
-      style={{ top: `${top}%`, height: `${height}%`, left, width: "50%", x: dragX, y: dragY }}
+      style={{ top: topMV, height: heightMV, left, width: "50%", x: dragX, y: dragY }}
       onDragStart={(event, info) => {
         const columnEl = document.querySelector(`[data-day="${lesson.day}"]`);
         if (!(columnEl instanceof HTMLElement)) return;
@@ -597,8 +684,60 @@ function LessonCard({
       onClick={(e) => e.stopPropagation()}
       className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 cursor-grab active:cursor-grabbing active:z-30"
     >
+      {(["start", "end"] as const).map((edge) => {
+        const handleY = edge === "start" ? startHandleY : endHandleY;
+        return (
+          <motion.div
+            key={edge}
+            drag="y"
+            dragMomentum={false}
+            style={{ y: handleY, opacity: resizingEdge === edge ? 0 : undefined }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(event, info) => {
+              const columnEl = document.querySelector(`[data-day="${lesson.day}"]`);
+              if (!(columnEl instanceof HTMLElement)) return;
+              setResizingEdge(edge);
+              resizeStartRef.current = {
+                edge,
+                pointerStartY: info.point.y,
+                originStartMin: timeToMinutes(lesson.startTime),
+                originEndMin: timeToMinutes(lesson.endTime),
+                columnHeight: columnEl.getBoundingClientRect().height,
+              };
+            }}
+            onDrag={(event, info) => {
+              if (!resizeStartRef.current) return;
+              const preview = computeResizePreview(lesson, resizeStartRef.current, info);
+              const previewStartMin = timeToMinutes(preview.start_time);
+              const previewEndMin = timeToMinutes(preview.end_time);
+              topMV.set(`${percentOfCalendar(previewStartMin)}%`);
+              heightMV.set(`${percentOfCalendar(previewEndMin) - percentOfCalendar(previewStartMin)}%`);
+              setResizePreview(preview);
+              handleY.set(0);
+            }}
+            onDragEnd={(event, info) => {
+              const rs = resizeStartRef.current;
+              resizeStartRef.current = null;
+              handleY.set(0);
+              setResizingEdge(null);
+              if (!rs) { setResizePreview(null); return; }
+              const preview = computeResizePreview(lesson, rs, info);
+              onResize(lesson, rs.edge, rs.edge === "start" ? preview.start_time : preview.end_time, () => {
+                // rejected — snap the card back to its original size
+                topMV.set(`${percentOfCalendar(rs.originStartMin)}%`);
+                heightMV.set(`${percentOfCalendar(rs.originEndMin) - percentOfCalendar(rs.originStartMin)}%`);
+                setResizePreview(null);
+              });
+            }}
+            className={`absolute inset-x-0 ${edge === "start" ? "top-0 -translate-y-1/2" : "bottom-0 translate-y-1/2"} h-2 flex items-center justify-center cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity`}
+          >
+            <div className="h-0.5 w-6 rounded-full bg-indigo-500" />
+          </motion.div>
+        );
+      })}
       <div className="text-[10px] font-bold truncate">{lesson.title}</div>
-      <div className="text-[9px] font-medium">{lesson.startTime}-{lesson.endTime}</div>
+      <div className="text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
 
       <button
