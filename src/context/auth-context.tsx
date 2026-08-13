@@ -12,6 +12,7 @@ interface CustomUser {
   email?: string;
   first_name?: string;
   last_name?: string;
+  is_staff?: boolean;
 }
 
 interface AuthContextValue {
@@ -24,11 +25,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Read state from Redux store
@@ -59,11 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return match ? `Class of ${match[1]}` : fallback;
   }, [user?.email]);
 
-  const isAdmin = useMemo(() => {
-    const email = user?.email?.toLowerCase();
-    if (!email) return false;
-    return ADMIN_EMAILS.includes(email);
-  }, [user?.email]);
+  const isAdmin = useMemo(() => !!user?.is_staff, [user?.is_staff]);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, logOut, classYear, isAdmin }}>
