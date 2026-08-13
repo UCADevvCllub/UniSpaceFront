@@ -71,7 +71,6 @@ export default function SchedulesPage() {
   });
 
 
-  // fetching bubble-event data from the endpoint
 
   const { data: djangoBubbleEvents, isLoading: isBubbleLoading } = useQuery({
     queryKey: ["django-bubble-events"],
@@ -84,8 +83,6 @@ export default function SchedulesPage() {
     if (!djangoBubbleEvents?.length) return [];
 
     const grouped = new Map<string, GymSlot>();
-
-    // determines the displays of the timeslot, day of the week
 
     for (const event of djangoBubbleEvents) {
       const day = event.event?.day?.toUpperCase();
@@ -114,7 +111,6 @@ export default function SchedulesPage() {
     return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
   }, [djangoBubbleEvents]);
 
-  // fetching gym-events data from the endpoint
 
   const { data: djangoGymEvents, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-gym-events"],
@@ -157,24 +153,10 @@ export default function SchedulesPage() {
 
   const facilities = useEvents({ type: "facility" });
 
-  const gymEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === "gym")
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [facilities.data],
-  );
-  const gymPrimaryEvent = gymEvents[0] ?? null;
+
   const gymSchedule = djangoGymSchedule.length > 0 ? djangoGymSchedule : [];
 
-  const bubbleEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === "bubble")
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [facilities.data],
-  );
-  const bubblePrimaryEvent = bubbleEvents[0] ?? null;
+
   const bubbleSchedule = djangoBubbleSchedule.length > 0 ? djangoBubbleSchedule : [];
 
   const filteredEvents = useMemo(
@@ -264,6 +246,8 @@ export default function SchedulesPage() {
     sat: "SAT",
     sun: "SUN",
   };
+
+  // cuts the time to appropriate format e.g 10:00
   const padTime = (t: string) => {
     const parts = t.split(":");
     if (parts.length < 2) return t;
@@ -273,6 +257,7 @@ export default function SchedulesPage() {
   const saveGymSchedule = async () => {
     if (!isAdmin) return;
 
+    // aknowledges the existing in the db events
     try {
       const existingEventsMap = new Map<string, any>();
       for (const event of djangoGymEvents ?? []) {
@@ -290,7 +275,7 @@ export default function SchedulesPage() {
       let patchedCount = 0;
       let createdCount = 0;
       let deletedCount = 0;
-
+      // appropriate for POST, PATCH and DELETE formatting
       for (const slot of gymForm) {
         if (!slot.time || !slot.time.includes("-")) continue;
         const [startRaw, endRaw] = slot.time.split("-").map((t) => t.trim());
@@ -307,6 +292,7 @@ export default function SchedulesPage() {
 
           if (existingEvent) {
             handledEventIds.add(existingEvent.id);
+            // If event exists and gender value was changed patches
             if (genderVal) {
               if (existingEvent.gender?.toUpperCase().trim() !== genderVal) {
                 patchedCount++;
@@ -321,10 +307,12 @@ export default function SchedulesPage() {
                   })
                 );
               }
+              // If event exists and its gender value does not exist anymore deletes
             } else {
               deletedCount++;
               requests.push(deleteGymEventDjango(existingEvent.id));
-            }
+            } 
+            // If event does not exist POST
           } else if (genderVal) {
             createdCount++;
             requests.push(
@@ -340,7 +328,7 @@ export default function SchedulesPage() {
           }
         }
       }
-
+      // For deleting the whole schedule row 
       for (const event of djangoGymEvents ?? []) {
         if (event.id && !handledEventIds.has(event.id)) {
           const day = event.event?.day?.toUpperCase();
