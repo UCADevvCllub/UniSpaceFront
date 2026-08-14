@@ -119,7 +119,6 @@ export async function fetchGymEvents() {
 
 // options
 export const fetchSubjects = () =>
-<<<<<<< HEAD
   djangoApi.get(`/api/subject-entries/`).then(res => res.data);
 
 export const fetchInstructors = () =>
@@ -130,18 +129,6 @@ export const fetchRooms = () =>
 
 export const fetchCohorts = () =>
   djangoApi.get(`/api/cohort-entries/`).then(res => res.data);
-=======
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/subject-entries/`).then(res => res.data);
-
-export const fetchInstructors = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/instructor-entries/`).then(res => res.data);
-
-export const fetchRooms = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/room-entries/`).then(res => res.data);
-
-export const fetchCohorts = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/cohort-entries/`).then(res => res.data);
->>>>>>> 5b562e274881dc0c90dbb6d23e3bce93fbf13d31
 
 export async function fetchEvents() {
   const response = await djangoApi.get(`/api/class-events/`);
