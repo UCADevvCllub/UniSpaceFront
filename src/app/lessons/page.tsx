@@ -1,10 +1,9 @@
 "use client";
-import axios from "axios";
 import { useState, useMemo, useRef, useLayoutEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { fetchClassEvents } from "@/lib/events";
+import { fetchClassEvents, djangoApi } from "@/lib/events";
 import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
@@ -17,15 +16,15 @@ import { Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { reverseDayMap } from "@/lib/utils";
 import { toast, Toaster } from "sonner";
-import { 
-  fetchEvents, 
-  fetchSubjects, 
-  fetchInstructors, 
-  fetchRooms, 
-  fetchCohorts 
+import {
+  fetchEvents,
+  fetchSubjects,
+  fetchInstructors,
+  fetchRooms,
+  fetchCohorts
 } from "@/lib/events";
 // --- CONSTANTS ---
-
+// bib
 
 
 
@@ -149,6 +148,7 @@ export default function LessonsPage() {
 
 
   const handleEditClick = (lesson: any) => {
+    if (!isAdmin) return;
     setFormData({
       subject_id: lesson.subjectId, 
       instructor_id: lesson.instructorId,
@@ -164,6 +164,7 @@ export default function LessonsPage() {
   
   // Function to open modal for ADDING
   const handleAddClick = () => {
+    if (!isAdmin) return;
     setFormData({
       subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
       day: "MON", start_time: "09:00", end_time: "10:30"
@@ -174,6 +175,7 @@ export default function LessonsPage() {
 
   // Opens the Add Lesson modal pre-filled with the day/time/cohort clicked on the calendar grid
   const handleSlotClick = (dayFull: string, e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isAdmin) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
@@ -207,6 +209,7 @@ export default function LessonsPage() {
     patch: { day: string; start_time: string; end_time: string },
     onRejected?: () => void,
   ) => {
+    if (!isAdmin) return;
     updateMutation.mutate(
       {
         id: lesson.id,
@@ -287,7 +290,7 @@ export default function LessonsPage() {
           status: "CLASS"
         }
       };
-    return axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`, payload);
+    return djangoApi.post(`/api/class-events/`, payload);
     },
 
 
@@ -320,6 +323,7 @@ const deleteMutation = useMutation({
   });
 
   const handleDelete = (id: string) => {
+    if (!isAdmin) return;
     if (window.confirm("Are you sure you want to delete this lesson?")) {
       deleteMutation.mutate(id);
     }
@@ -365,11 +369,14 @@ const deleteMutation = useMutation({
             {group}
           </button>
         ))}
-        <Button 
-  onClick={handleAddClick} // <--- FIX: This calls setEditingId(null)
-  className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2" >
-  <span className="text-lg">+</span> Add Lesson
-</Button>
+        {isAdmin && (
+          <Button
+            onClick={handleAddClick}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+          >
+            <span className="text-lg">+</span> Add Lesson
+          </Button>
+        )}
       </div>
 
 
@@ -410,8 +417,8 @@ const deleteMutation = useMutation({
                   <div
                     key={day}
                     data-day={day}
-                    className="border-r border-slate-100 relative last:border-r-0 cursor-pointer"
-                    onClick={(e) => handleSlotClick(day, e)}
+                    className={`border-r border-slate-100 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
+                    onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
                   >
                     {/* Hour Lines */}
                     {Array.from({ length: 12 }).map((_, i) => (
@@ -423,6 +430,7 @@ const deleteMutation = useMutation({
                       <LessonCard
                         key={lesson.id}
                         lesson={lesson}
+                        isAdmin={isAdmin}
                         onEdit={handleEditClick}
                         onDelete={handleDelete}
                         onMove={applyLessonMove}
@@ -555,8 +563,9 @@ const deleteMutation = useMutation({
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
 
-              <Button 
+              <Button
             onClick={() => {
+              if (!isAdmin) return;
               if (editingId) {
                 // Pass ID and the form data
                 updateMutation.mutate({ id: editingId, data: formData });
@@ -590,12 +599,14 @@ const deleteMutation = useMutation({
 // drag start), not the raw cursor position.
 function LessonCard({
   lesson,
+  isAdmin,
   onEdit,
   onDelete,
   onMove,
   onResize,
 }: {
   lesson: any;
+  isAdmin: boolean;
   onEdit: (lesson: any) => void;
   onDelete: (id: string) => void;
   onMove: (lesson: any, target: { dayFull: string; time: string }, onRejected?: () => void) => void;
@@ -641,7 +652,7 @@ function LessonCard({
 
   return (
     <motion.div
-      drag
+      drag={isAdmin}
       dragMomentum={false}
       style={{ top: topMV, height: heightMV, left, width: "50%", x: dragX, y: dragY }}
       onDragStart={(event, info) => {
@@ -682,9 +693,9 @@ function LessonCard({
         });
       }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 cursor-grab active:cursor-grabbing active:z-30"
+      className={`absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 active:z-30 ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
-      {(["start", "end"] as const).map((edge) => {
+      {isAdmin && (["start", "end"] as const).map((edge) => {
         const handleY = edge === "start" ? startHandleY : endHandleY;
         return (
           <motion.div
@@ -740,6 +751,7 @@ function LessonCard({
       <div className="text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
 
+      {isAdmin && (
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -749,6 +761,8 @@ function LessonCard({
       >
         <Pencil size={12} />
       </button>
+      )}
+      {isAdmin && (
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -758,6 +772,7 @@ function LessonCard({
       >
         <Trash2 size={14} />
       </button>
+      )}
     </motion.div>
   );
 }

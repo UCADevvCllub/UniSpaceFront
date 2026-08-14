@@ -1,5 +1,12 @@
 import axios from "axios";
 
+// sends the saved JWT with every Django call, so admin writes actually authenticate
+export const djangoApi = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_LOCAL });
+djangoApi.interceptors.request.use((config) => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access") : null;
+  if (token) config.headers.Authorization = `JWT ${token}`;
+  return config;
+});
 
 import {
   QueryConstraint,
@@ -95,14 +102,14 @@ export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
 // fetching bubble-event data from the endpoint
 
 export async function fetchBubbleEvents() {
-  const responce = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/bubble-events/`)
+  const responce = await djangoApi.get(`/api/bubble-events/`)
   return responce.data
 }
 
 // fetching gym-event data from the endpoint
 
 export async function fetchGymEvents() {
-  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/gym-events/`);
+  const response = await djangoApi.get(`/api/gym-events/`);
   return response.data;
 }
 
@@ -112,19 +119,19 @@ export async function fetchGymEvents() {
 
 // options
 export const fetchSubjects = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/subject-entries/`).then(res => res.data);
+  djangoApi.get(`/api/subject-entries/`).then(res => res.data);
 
 export const fetchInstructors = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/instructor-entries/`).then(res => res.data);
+  djangoApi.get(`/api/instructor-entries/`).then(res => res.data);
 
 export const fetchRooms = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/room-entries/`).then(res => res.data);
+  djangoApi.get(`/api/room-entries/`).then(res => res.data);
 
 export const fetchCohorts = () =>
-  axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/cohort-entries/`).then(res => res.data);
+  djangoApi.get(`/api/cohort-entries/`).then(res => res.data);
 
 export async function fetchEvents() {
-  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
+  const response = await djangoApi.get(`/api/class-events/`);
   return response.data;
 }
 // CREATE
@@ -135,54 +142,46 @@ export async function createClassEvent(data: any) {
     cohort_id: data.cohortId,
     room_id: data.roomId,
     event_data: {
-      day: data.day, 
-      start_time: data.startTime, 
-      end_time: data.endTime,    
+      day: data.day,
+      start_time: data.startTime,
+      end_time: data.endTime,
       status: 'CLASS'
     }
   };
-  const response = await axios.post(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`, payload);
+  const response = await djangoApi.post(`/api/class-events/`, payload);
   return response.data;
 }
 
 // ADD
 
 export async function updateClassEvent(id: string, data: any) {
-  console.log("API CALL STARTING - ID:", id); 
-  
-
   const payload = {
     subject_id: parseInt(data.subject_id),
     instructor_id: parseInt(data.instructor_id),
     cohort_id: parseInt(data.cohort_id),
     room_id: parseInt(data.room_id),
     event_data: {
-      day: data.day, 
+      day: data.day,
       start_time: data.start_time.length === 5 ? data.start_time + ":00" : data.start_time,
       end_time: data.end_time.length === 5 ? data.end_time + ":00" : data.end_time,
       status: "CLASS"
     }
   };
 
-  console.log("PAYLOAD READY:", payload);
-
-
-  const url = `${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/${id}/`;
-  
-  return axios.patch(url, payload);
+  return djangoApi.patch(`/api/class-events/${id}/`, payload);
 }
 
 
 
 // all the classevents
 export async function fetchClassEvents() {
-  const response = await axios.get(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/`);
+  const response = await djangoApi.get(`/api/class-events/`);
   return response.data;
 }
 // deleto
 export async function deleteClassEvent(id: string) {
 
-  const response = await axios.delete(`${process.env.NEXT_PUBLIC_API_LOCAL}/api/class-events/${id}/`);
+  const response = await djangoApi.delete(`/api/class-events/${id}/`);
   return response.data;
 }
 
