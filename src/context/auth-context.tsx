@@ -13,6 +13,11 @@ interface CustomUser {
   first_name?: string;
   last_name?: string;
   is_staff?: boolean;
+<<<<<<< HEAD
+=======
+  is_superuser?: boolean;
+  role?: string;
+>>>>>>> 5b562e274881dc0c90dbb6d23e3bce93fbf13d31
 }
 
 interface AuthContextValue {
@@ -55,7 +60,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return match ? `Class of ${match[1]}` : fallback;
   }, [user?.email]);
 
+<<<<<<< HEAD
   const isAdmin = useMemo(() => !!user?.is_staff, [user?.is_staff]);
+=======
+  const isAdmin = useMemo(() => {
+    if (!user) return false;
+    if (user.is_staff || user.is_superuser || user.role === "admin") return true;
+    const email = user.email?.toLowerCase();
+    if (email && ADMIN_EMAILS.includes(email)) return true;
+    return false;
+  }, [user]);
+>>>>>>> 5b562e274881dc0c90dbb6d23e3bce93fbf13d31
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, logOut, classYear, isAdmin }}>

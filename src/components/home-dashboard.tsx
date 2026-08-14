@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useAuth } from "@/context/auth-context";
-import { pickCurrentOrNextEvent } from "@/lib/events";
+import { pickCurrentOrNextEvent, CANTEEN_SCHEDULE } from "@/lib/events";
 import { formatEventTime } from "@/lib/utils";
 import { useEvents } from "@/hooks/use-events";
 import { Card } from "@/components/ui/card";
@@ -17,9 +17,6 @@ export function HomeDashboard() {
     [lessons.data],
   );
 
-  const canteenEvent = (facilities.data ?? []).find((event) =>
-    event.title.toLowerCase().includes("canteen"),
-  );
   const gymEvent = (facilities.data ?? []).find((event) =>
     event.location.toLowerCase().includes("gym"),
   );
@@ -51,10 +48,12 @@ export function HomeDashboard() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
-          <p className="text-xs uppercase text-slate-500">Canteen</p>
-          <p className="mt-1 text-sm font-medium">
-            {canteenEvent?.description ?? "No menu posted yet."}
-          </p>
+          <p className="text-xs uppercase text-slate-500">Canteen Schedule</p>
+          <div className="mt-1 text-sm text-slate-700 space-y-0.5">
+            <p><span className="font-semibold text-slate-900">Breakfast:</span> {CANTEEN_SCHEDULE.breakfastWeekday} (WD) / {CANTEEN_SCHEDULE.breakfastWeekend} (WE)</p>
+            <p><span className="font-semibold text-slate-900">Lunch:</span> {CANTEEN_SCHEDULE.lunch}</p>
+            <p><span className="font-semibold text-slate-900">Dinner:</span> {CANTEEN_SCHEDULE.dinner}</p>
+          </div>
         </Card>
         <Card>
           <p className="text-xs uppercase text-slate-500">Gym Status</p>
