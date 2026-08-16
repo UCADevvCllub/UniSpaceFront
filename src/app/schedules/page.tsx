@@ -9,18 +9,17 @@ import { useAuth } from "@/context/auth-context";
 import { useEvents } from "@/hooks/use-events";
 import { createScheduleEvent, deleteScheduleEvent, updateScheduleEvent } from "@/lib/admin-events";
 import { formatEventTime } from "@/lib/utils";
-import { fetchGymEvents } from "@/lib/events";
-import { fetchBubbleEvents } from "@/lib/events"
-
-const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
-type ScheduleTab = (typeof scheduleTabs)[number];
-
-const defaultCanteenSchedule = {
-  breakfastWeekday: "8:00 AM - 9:30 AM",
-  breakfastWeekend: "10:00 AM",
-  lunch: "12:00 PM - 2:00 PM",
-  dinner: "6:00 PM - 8:00 PM",
-};
+import {
+  fetchGymEvents,
+  fetchBubbleEvents,
+  createGymEventDjango,
+  patchGymEventDjango,
+  deleteGymEventDjango,
+  createBubbleEventDjango,
+  patchBubbleEventDjango,
+  deleteBubbleEventDjango,
+  CANTEEN_SCHEDULE,
+} from "@/lib/events";
 
 export type GymSlot = {
   time: string;
@@ -33,59 +32,8 @@ export type GymSlot = {
   sun: string;
 };
 
-const defaultBubbleSchedule: GymSlot[] = [
-  { time: "10:00am - 11:00am", mon: "CLEANING & DISINFECTION", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "CLEANING & DISINFECTION", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "CLEANING & DISINFECTION", sat: "", sun: "" },
-  { time: "11:00am - 12:00pm", mon: "CLEANING & DISINFECTION", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "CLEANING & DISINFECTION", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "CLEANING & DISINFECTION", sat: "TENNIS", sun: "TENNIS" },
-  { time: "12:00pm - 1:00pm", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "TENNIS", sun: "TENNIS" },
-  { time: "1:00pm - 2:00pm", mon: "MCHS", tue: "", wed: "MCHS", thu: "", fri: "", sat: "", sun: "" },
-  { time: "2:00pm - 3:00pm", mon: "MCHS", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "MCHS", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "FOOTBALL FEMALE", sat: "JUDO GRAPPLING", sun: "JUDO GRAPPLING" },
-  { time: "3:00pm - 4:00pm", mon: "", tue: "ALTAI-NARYN FOOTBALL SCHOOL", wed: "", thu: "ALTAI-NARYN FOOTBALL SCHOOL", fri: "FOOTBALL FEMALE", sat: "JUDO GRAPPLING", sun: "JUDO GRAPPLING" },
-  { time: "4:00pm - 5:00pm", mon: "", tue: "PHYSICAL EDUCATION", wed: "", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "CRICKET", sun: "FOOTBALL FEMALE" },
-  { time: "5:00pm - 6:00pm", mon: "PHYSICAL EDUCATION", tue: "PHYSICAL EDUCATION", wed: "JUDO GRAPPLING", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "CRICKET", sun: "FOOTBALL FEMALE" },
-  { time: "6:00pm - 7:00pm", mon: "UCA SECURITY", tue: "PHYSICAL EDUCATION", wed: "JUDO GRAPPLING", thu: "PHYSICAL EDUCATION", fri: "PHYSICAL EDUCATION", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "7:00pm - 8:00pm", mon: "UCA SECURITY", tue: "VOLLEYBALL", wed: "UCA FACULTY", thu: "BASKETBALL", fri: "UCA SECURITY", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "8:00pm - 9:00pm", mon: "UCA SECURITY", tue: "VOLLEYBALL", wed: "UCA FACULTY", thu: "BASKETBALL", fri: "UCA SECURITY", sat: "VOLLEYBALL", sun: "FOOTBALL" },
-  { time: "9:00pm - 10:00pm", mon: "CRICKET", tue: "BASKETBALL", wed: "FOOTBALL", thu: "VOLLEYBALL", fri: "FOOTBALL", sat: "BASKETBALL", sun: "MEP&KITCHEN" },
-  { time: "10:00pm - 11:30pm", mon: "CRICKET", tue: "BASKETBALL", wed: "FOOTBALL", thu: "VOLLEYBALL", fri: "FOOTBALL", sat: "BASKETBALL", sun: "MEP&KITCHEN" },
-];
-
-function parseBubbleSchedule(description?: string): GymSlot[] {
-  if (!description) return defaultBubbleSchedule;
-  try {
-    const parsed = JSON.parse(description);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    // ignore
-  }
-  return defaultBubbleSchedule;
-}
-
-function serializeCanteenSchedule(schedule: typeof defaultCanteenSchedule) {
-  return [
-    `BreakfastWeekday=${schedule.breakfastWeekday}`,
-    `BreakfastWeekend=${schedule.breakfastWeekend}`,
-    `Lunch=${schedule.lunch}`,
-    `Dinner=${schedule.dinner}`,
-  ].join("\n");
-}
-
-function parseCanteenSchedule(description?: string) {
-  if (!description) return defaultCanteenSchedule;
-
-  const map = new Map<string, string>();
-  for (const line of description.split("\n")) {
-    const [key, ...rest] = line.split("=");
-    if (!key || !rest.length) continue;
-    map.set(key.trim(), rest.join("=").trim());
-  }
-
-  return {
-    breakfastWeekday: map.get("BreakfastWeekday") || defaultCanteenSchedule.breakfastWeekday,
-    breakfastWeekend: map.get("BreakfastWeekend") || defaultCanteenSchedule.breakfastWeekend,
-    lunch: map.get("Lunch") || defaultCanteenSchedule.lunch,
-    dinner: map.get("Dinner") || defaultCanteenSchedule.dinner,
-  };
-}
+const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
+type ScheduleTab = (typeof scheduleTabs)[number];
 
 function dateToInput(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -105,18 +53,14 @@ const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
 };
 
 export default function SchedulesPage() {
-  console.log("Current API URL:", process.env.NEXT_PUBLIC_API_LOCAL);
-  let { isAdmin } = useAuth();
-  isAdmin= true;
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [isEditingCanteen, setIsEditingCanteen] = useState(false);
-  const [canteenForm, setCanteenForm] = useState(defaultCanteenSchedule);
   const [isEditingGym, setIsEditingGym] = useState(false);
   const [gymForm, setGymForm] = useState<GymSlot[]>([]);
   const [isEditingBubble, setIsEditingBubble] = useState(false);
-  const [bubbleForm, setBubbleForm] = useState<GymSlot[]>(defaultBubbleSchedule);
+  const [bubbleForm, setBubbleForm] = useState<GymSlot[]>([]);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -126,7 +70,7 @@ export default function SchedulesPage() {
     description: "",
   });
 
-  // fetching bubble-event data from the endpoint
+
 
   const { data: djangoBubbleEvents, isLoading: isBubbleLoading } = useQuery({
     queryKey: ["django-bubble-events"],
@@ -139,8 +83,6 @@ export default function SchedulesPage() {
     if (!djangoBubbleEvents?.length) return [];
 
     const grouped = new Map<string, GymSlot>();
-
-    // determines the displays of the timeslot, day of the week
 
     for (const event of djangoBubbleEvents) {
       const day = event.event?.day?.toUpperCase();
@@ -169,7 +111,6 @@ export default function SchedulesPage() {
     return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
   }, [djangoBubbleEvents]);
 
- // fetching gym-events data from the endpoint
 
   const { data: djangoGymEvents, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-gym-events"],
@@ -188,7 +129,7 @@ export default function SchedulesPage() {
       const day = event.event?.day?.toUpperCase();
       const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
       const dayKey = day ? gymDayKeyMap[day] : undefined;
-    
+
 
       if (!dayKey) continue;
 
@@ -211,34 +152,11 @@ export default function SchedulesPage() {
   }, [djangoGymEvents]);
 
   const facilities = useEvents({ type: "facility" });
-  const canteenEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === "canteen")
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [facilities.data],
-  );
-  const canteenPrimaryEvent = canteenEvents[0] ?? null;
-  const canteenSchedule = parseCanteenSchedule(canteenPrimaryEvent?.description);
-  
-  const gymEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === "gym")
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [facilities.data],
-  );
-  const gymPrimaryEvent = gymEvents[0] ?? null;
+
+
   const gymSchedule = djangoGymSchedule.length > 0 ? djangoGymSchedule : [];
 
-  const bubbleEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === "bubble")
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [facilities.data],
-  );
-  const bubblePrimaryEvent = bubbleEvents[0] ?? null;
+
   const bubbleSchedule = djangoBubbleSchedule.length > 0 ? djangoBubbleSchedule : [];
 
   const filteredEvents = useMemo(
@@ -253,7 +171,6 @@ export default function SchedulesPage() {
     setEditingEventId(null);
     setStatus("");
     setForm({ title: "", group: "All", start: "", end: "", description: "" });
-    setIsEditingCanteen(false);
     setIsEditingGym(false);
     setIsEditingBubble(false);
   };
@@ -317,87 +234,134 @@ export default function SchedulesPage() {
   };
 
   useEffect(() => {
-    if (activeTab !== "Canteen") setStatus("");
+    setStatus("");
   }, [activeTab]);
 
-  const saveCanteenSchedule = async () => {
-    if (!isAdmin) return;
-    try {
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 0, 0);
-      const description = serializeCanteenSchedule(canteenForm);
+  const dayKeyToDjangoDay: Record<string, string> = {
+    mon: "MON",
+    tue: "TUE",
+    wed: "WED",
+    thu: "THU",
+    fri: "FRI",
+    sat: "SAT",
+    sun: "SUN",
+  };
 
-      if (canteenPrimaryEvent) {
-        await updateScheduleEvent(canteenPrimaryEvent.id, {
-          title: "Canteen Schedule",
-          type: "facility",
-          location: "Canteen",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      } else {
-        await createScheduleEvent({
-          title: "Canteen Schedule",
-          type: "facility",
-          location: "Canteen",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      }
-
-      const duplicateEvents = canteenEvents.slice(1);
-      await Promise.all(duplicateEvents.map((event) => deleteScheduleEvent(event.id)));
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      setStatus("Canteen schedule updated successfully.");
-      setIsEditingCanteen(false);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save canteen schedule.");
-    }
+  // cuts the time to appropriate format e.g 10:00
+  const padTime = (t: string) => {
+    const parts = t.split(":");
+    if (parts.length < 2) return t;
+    return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
   };
 
   const saveGymSchedule = async () => {
     if (!isAdmin) return;
-    try {
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 0, 0);
-      const description = JSON.stringify(gymForm);
 
-      if (gymPrimaryEvent) {
-        await updateScheduleEvent(gymPrimaryEvent.id, {
-          title: "Gym Schedule",
-          type: "facility",
-          location: "Gym",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      } else {
-        await createScheduleEvent({
-          title: "Gym Schedule",
-          type: "facility",
-          location: "Gym",
-          group: "All",
-          start,
-          end,
-          description,
-        });
+    // aknowledges the existing in the db events
+    try {
+      const existingEventsMap = new Map<string, any>();
+      for (const event of djangoGymEvents ?? []) {
+        const day = event.event?.day?.toUpperCase();
+        const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
+        const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
+        if (day && startTime && endTime) {
+          const key = `${day}_${startTime}-${endTime}`;
+          existingEventsMap.set(key, event);
+        }
       }
 
-      const duplicateEvents = gymEvents.slice(1);
-      await Promise.all(duplicateEvents.map((event) => deleteScheduleEvent(event.id)));
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      setStatus("Gym schedule updated successfully.");
+      const handledEventIds = new Set<number | string>();
+      const requests: Promise<any>[] = [];
+      let patchedCount = 0;
+      let createdCount = 0;
+      let deletedCount = 0;
+      // appropriate for POST, PATCH and DELETE formatting
+      for (const slot of gymForm) {
+        if (!slot.time || !slot.time.includes("-")) continue;
+        const [startRaw, endRaw] = slot.time.split("-").map((t) => t.trim());
+        const startPadded = padTime(startRaw);
+        const endPadded = padTime(endRaw);
+        const startTime = `${startPadded}:00`;
+        const endTime = `${endPadded}:00`;
+
+        for (const dayKey of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const) {
+          const genderVal = slot[dayKey]?.trim().toUpperCase();
+          const day = dayKeyToDjangoDay[dayKey];
+          const slotKey = `${day}_${startPadded}-${endPadded}`;
+          const existingEvent = existingEventsMap.get(slotKey);
+
+          if (existingEvent) {
+            handledEventIds.add(existingEvent.id);
+            // If event exists and gender value was changed patches
+            if (genderVal) {
+              if (existingEvent.gender?.toUpperCase().trim() !== genderVal) {
+                patchedCount++;
+                requests.push(
+                  patchGymEventDjango(existingEvent.id, {
+                    gender: genderVal,
+                    event_data: {
+                      day,
+                      start_time: startTime,
+                      end_time: endTime,
+                    },
+                  })
+                );
+              }
+              // If event exists and its gender value does not exist anymore deletes
+            } else {
+              deletedCount++;
+              requests.push(deleteGymEventDjango(existingEvent.id));
+            } 
+            // If event does not exist POST
+          } else if (genderVal) {
+            createdCount++;
+            requests.push(
+              createGymEventDjango({
+                gender: genderVal,
+                event_data: {
+                  day,
+                  start_time: startTime,
+                  end_time: endTime,
+                },
+              })
+            );
+          }
+        }
+      }
+      // For deleting the whole schedule row 
+      for (const event of djangoGymEvents ?? []) {
+        if (event.id && !handledEventIds.has(event.id)) {
+          const day = event.event?.day?.toUpperCase();
+          const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
+          const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
+          const rowExists = gymForm.some((slot) => {
+            if (!slot.time || !slot.time.includes("-")) return false;
+            const [s, e] = slot.time.split("-").map((t) => padTime(t.trim()));
+            return `${s}-${e}` === `${startTime}-${endTime}`;
+          });
+          if (!rowExists) {
+            deletedCount++;
+            requests.push(deleteGymEventDjango(event.id));
+          }
+        }
+      }
+
+      if (requests.length === 0) {
+        setStatus("No changes detected in gym schedule.");
+        setIsEditingGym(false);
+        return;
+      }
+
+      await Promise.all(requests);
+
+      await queryClient.invalidateQueries({ queryKey: ["django-gym-events"] });
+
+      const details = [];
+      if (patchedCount > 0) details.push(`${patchedCount} patched`);
+      if (createdCount > 0) details.push(`${createdCount} created`);
+      if (deletedCount > 0) details.push(`${deletedCount} deleted`);
+
+      setStatus(`Gym schedule updated successfully (${details.join(", ")}).`);
       setIsEditingGym(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to save gym schedule.");
@@ -407,39 +371,106 @@ export default function SchedulesPage() {
   const saveBubbleSchedule = async () => {
     if (!isAdmin) return;
     try {
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 0, 0);
-      const description = JSON.stringify(bubbleForm);
-
-      if (bubblePrimaryEvent) {
-        await updateScheduleEvent(bubblePrimaryEvent.id, {
-          title: "Bubble Schedule",
-          type: "facility",
-          location: "Bubble",
-          group: "All",
-          start,
-          end,
-          description,
-        });
-      } else {
-        await createScheduleEvent({
-          title: "Bubble Schedule",
-          type: "facility",
-          location: "Bubble",
-          group: "All",
-          start,
-          end,
-          description,
-        });
+      const existingEventsMap = new Map<string, any>();
+      for (const event of djangoBubbleEvents ?? []) {
+        const day = event.event?.day?.toUpperCase();
+        const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
+        const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
+        if (day && startTime && endTime) {
+          const key = `${day}_${startTime}-${endTime}`;
+          existingEventsMap.set(key, event);
+        }
       }
 
-      const duplicateEvents = bubbleEvents.slice(1);
-      await Promise.all(duplicateEvents.map((event) => deleteScheduleEvent(event.id)));
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      setStatus("Bubble schedule updated successfully.");
+      const handledEventIds = new Set<number | string>();
+      const requests: Promise<any>[] = [];
+      let patchedCount = 0;
+      let createdCount = 0;
+      let deletedCount = 0;
+
+      for (const slot of bubbleForm) {
+        if (!slot.time || !slot.time.includes("-")) continue;
+        const [startRaw, endRaw] = slot.time.split("-").map((t) => t.trim());
+        const startPadded = padTime(startRaw);
+        const endPadded = padTime(endRaw);
+        const startTime = `${startPadded}:00`;
+        const endTime = `${endPadded}:00`;
+
+        for (const dayKey of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const) {
+          const activityName = slot[dayKey]?.trim();
+          const day = dayKeyToDjangoDay[dayKey];
+          const slotKey = `${day}_${startPadded}-${endPadded}`;
+          const existingEvent = existingEventsMap.get(slotKey);
+
+          if (existingEvent) {
+            handledEventIds.add(existingEvent.id);
+            if (activityName) {
+              if (existingEvent.name?.trim().toUpperCase() !== activityName.toUpperCase()) {
+                patchedCount++;
+                requests.push(
+                  patchBubbleEventDjango(existingEvent.id, {
+                    name: activityName,
+                    event_data: {
+                      day,
+                      start_time: startTime,
+                      end_time: endTime,
+                    },
+                  })
+                );
+              }
+            } else {
+              deletedCount++;
+              requests.push(deleteBubbleEventDjango(existingEvent.id));
+            }
+          } else if (activityName) {
+            createdCount++;
+            requests.push(
+              createBubbleEventDjango({
+                name: activityName,
+                event_data: {
+                  day,
+                  start_time: startTime,
+                  end_time: endTime,
+                },
+              })
+            );
+          }
+        }
+      }
+
+      for (const event of djangoBubbleEvents ?? []) {
+        if (event.id && !handledEventIds.has(event.id)) {
+          const day = event.event?.day?.toUpperCase();
+          const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
+          const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
+          const rowExists = bubbleForm.some((slot) => {
+            if (!slot.time || !slot.time.includes("-")) return false;
+            const [s, e] = slot.time.split("-").map((t) => padTime(t.trim()));
+            return `${s}-${e}` === `${startTime}-${endTime}`;
+          });
+          if (!rowExists) {
+            deletedCount++;
+            requests.push(deleteBubbleEventDjango(event.id));
+          }
+        }
+      }
+
+      if (requests.length === 0) {
+        setStatus("No changes detected in bubble schedule.");
+        setIsEditingBubble(false);
+        return;
+      }
+
+      await Promise.all(requests);
+
+      await queryClient.invalidateQueries({ queryKey: ["django-bubble-events"] });
+
+      const details = [];
+      if (patchedCount > 0) details.push(`${patchedCount} patched`);
+      if (createdCount > 0) details.push(`${createdCount} created`);
+      if (deletedCount > 0) details.push(`${deletedCount} deleted`);
+
+      setStatus(`Bubble schedule updated successfully (${details.join(", ")}).`);
       setIsEditingBubble(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to save bubble schedule.");
@@ -520,105 +551,53 @@ export default function SchedulesPage() {
       {activeTab === "Canteen" && (
         <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
           <h2 className="text-xl font-bold text-slate-900">Canteen Schedule</h2>
-          
-          {isEditingCanteen ? (
-            <div className="space-y-3">
-              <label className="block text-sm text-slate-700">
-                Breakfast (Weekday)
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  value={canteenForm.breakfastWeekday}
-                  onChange={(event) => setCanteenForm((prev) => ({ ...prev, breakfastWeekday: event.target.value }))}
-                />
-              </label>
-              <label className="block text-sm text-slate-700">
-                Breakfast (Weekend)
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  value={canteenForm.breakfastWeekend}
-                  onChange={(event) => setCanteenForm((prev) => ({ ...prev, breakfastWeekend: event.target.value }))}
-                />
-              </label>
-              <label className="block text-sm text-slate-700">
-                Lunch
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  value={canteenForm.lunch}
-                  onChange={(event) => setCanteenForm((prev) => ({ ...prev, lunch: event.target.value }))}
-                />
-              </label>
-              <label className="block text-sm text-slate-700">
-                Dinner
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  value={canteenForm.dinner}
-                  onChange={(event) => setCanteenForm((prev) => ({ ...prev, dinner: event.target.value }))}
-                />
-              </label>
-              <div className="flex gap-2 pt-2">
-                <Button onClick={saveCanteenSchedule}>Save</Button>
-                <Button variant="outline" onClick={() => setIsEditingCanteen(false)}>Cancel</Button>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-orange-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow-inner">
+                  <Coffee className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-bold text-orange-950">Breakfast</h3>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-orange-900">
+                  <span className="text-orange-700/80">Weekday:</span> {CANTEEN_SCHEDULE.breakfastWeekday}
+                </p>
+                <p className="text-sm font-medium text-orange-900">
+                  <span className="text-orange-700/80">Weekend:</span> {CANTEEN_SCHEDULE.breakfastWeekend}
+                </p>
               </div>
             </div>
-          ) : (
-            <>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-orange-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow-inner">
-                      <Coffee className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-lg font-bold text-orange-950">Breakfast</h3>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-orange-900">
-                      <span className="text-orange-700/80">Weekday:</span> {canteenSchedule.breakfastWeekday}
-                    </p>
-                    <p className="text-sm font-medium text-orange-900">
-                      <span className="text-orange-700/80">Weekend:</span> {canteenSchedule.breakfastWeekend}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-amber-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-inner">
-                      <Sun className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-lg font-bold text-amber-950">Lunch</h3>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-lg font-semibold text-amber-900">
-                      {canteenSchedule.lunch}
-                    </p>
-                  </div>
+            <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-amber-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-inner">
+                  <Sun className="h-5 w-5" />
                 </div>
-
-                <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white shadow-inner">
-                      <Moon className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-lg font-bold text-indigo-950">Dinner</h3>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-lg font-semibold text-indigo-900">
-                      {canteenSchedule.dinner}
-                    </p>
-                  </div>
-                </div>
+                <h3 className="text-lg font-bold text-amber-950">Lunch</h3>
               </div>
-              {isAdmin && (
-                <Button onClick={() => {
-                  setCanteenForm(canteenSchedule);
-                  setIsEditingCanteen(true);
-                }}>
-                  Edit Canteen Schedule
-                </Button>
-              )}
-            </>
-          )}
-          {status && <p className="text-sm text-slate-600">{status}</p>}
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-amber-900">
+                  {CANTEEN_SCHEDULE.lunch}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white shadow-inner">
+                  <Moon className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-bold text-indigo-950">Dinner</h3>
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-indigo-900">
+                  {CANTEEN_SCHEDULE.dinner}
+                </p>
+              </div>
+            </div>
+          </div>
         </Card>
       )}
 
