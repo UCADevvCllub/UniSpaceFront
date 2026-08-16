@@ -151,15 +151,15 @@ export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
 // fetching bubble-event data from the endpoint
 
 export async function fetchBubbleEvents() {
-  const responce = await djangoApi.get(`/api/bubble-events/`)
-  return responce.data
+  const response = await djangoApi.get(`/api/bubble-events/`);
+  return Array.isArray(response.data) ? response.data : (response.data?.results || []);
 }
 
 // fetching gym-event data from the endpoint
 
 export async function fetchGymEvents() {
   const response = await djangoApi.get(`/api/gym-events/`);
-  return response.data;
+  return Array.isArray(response.data) ? response.data : (response.data?.results || []);
 }
 
 
