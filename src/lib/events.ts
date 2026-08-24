@@ -179,6 +179,9 @@ export const fetchRooms = () =>
 export const fetchCohorts = () =>
   djangoApi.get(`/api/cohort-entries/`).then(res => res.data);
 
+export const fetchContacts = () =>
+  djangoApi.get(`/api/contacts/`).then(res => res.data);
+
 export async function fetchEvents() {
   const response = await djangoApi.get(`/api/class-events/`);
   return response.data;

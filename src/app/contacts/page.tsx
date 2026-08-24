@@ -5,9 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PhoneCall, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-import { useEvents } from "@/hooks/use-events";
-import { createScheduleEvent, deleteScheduleEvent } from "@/lib/admin-events";
-import { useQueryClient } from "@tanstack/react-query";
+import { fetchContacts } from "@/lib/events";
+import { createContact, deleteContact } from "@/lib/admin-events";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export default function ContactsPage() {
   const { isAdmin } = useAuth();
@@ -23,8 +23,14 @@ export default function ContactsPage() {
     phone: "",
   });
 
-  const contactsQuery = useEvents({ type: "contact", group: activeTab });
-  const contacts = contactsQuery.data ?? [];
+  const contactsQuery = useQuery({
+    queryKey: ["django-contacts"],
+    queryFn: fetchContacts,
+  });
+  const locationMap = { onCampus: "ON_CAMPUS", offCampus: "OFF_CAMPUS" };
+  const contacts = (contactsQuery.data ?? []).filter(
+    (contact: any) => contact.location === locationMap[activeTab]
+  );
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,16 +41,13 @@ export default function ContactsPage() {
     }
     setIsSubmitting(true);
     try {
-      await createScheduleEvent({
-        title: form.name,
-        type: "contact",
-        location: form.phone,
-        group: activeTab,
-        start: new Date(),
-        end: new Date(),
-        description: form.role,
+      await createContact({
+        full_name: form.name,
+        role: form.role,
+        phone_number: form.phone,
+        location: locationMap[activeTab],
       });
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
+      await queryClient.invalidateQueries({ queryKey: ["django-contacts"] });
       setForm({ name: "", role: "", phone: "" });
       setIsAdding(false);
       setStatus("");
@@ -58,8 +61,8 @@ export default function ContactsPage() {
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this contact?")) return;
     try {
-      await deleteScheduleEvent(id);
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
+      await deleteContact(id);
+      await queryClient.invalidateQueries({ queryKey: ["django-contacts"] });
     } catch (error) {
       console.error(error);
     }
@@ -157,7 +160,7 @@ export default function ContactsPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {contacts.map((contact) => (
+        {contacts.map((contact: any) => (
           <Card key={contact.id} className="p-5 border-slate-200 hover:shadow-md transition-shadow bg-white relative group">
             {isAdmin && (
               <Button
@@ -168,15 +171,15 @@ export default function ContactsPage() {
                 <Trash2 className="w-4 h-4" />
               </Button>
             )}
-            <h3 className="font-bold text-lg text-slate-900 pr-8">{contact.title}</h3>
-            {contact.description && <p className="text-sm font-medium text-indigo-600 mb-4">{contact.description}</p>}
-            
+            <h3 className="font-bold text-lg text-slate-900 pr-8">{contact.full_name}</h3>
+            {contact.role && <p className="text-sm font-medium text-indigo-600 mb-4">{contact.role}</p>}
+
             <div className="space-y-2.5 text-sm mt-3">
-              {contact.location && (
+              {contact.phone_number && (
                 <div className="flex items-center text-slate-700">
                   <PhoneCall className="w-4 h-4 mr-2.5 text-slate-400" />
-                  <a href={`tel:${contact.location.replace(/[^0-9+]/g, '')}`} className="hover:text-indigo-600 transition-colors">
-                    {contact.location}
+                  <a href={`tel:${contact.phone_number.replace(/[^0-9+]/g, '')}`} className="hover:text-indigo-600 transition-colors">
+                    {contact.phone_number}
                   </a>
                 </div>
               )}
