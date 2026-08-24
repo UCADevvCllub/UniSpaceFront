@@ -80,14 +80,16 @@ export default function SchedulesPage() {
   // django bubble-event data to front end 
 
   const djangoBubbleSchedule = useMemo(() => {
-    if (!djangoBubbleEvents?.length) return [];
+    if (!Array.isArray(djangoBubbleEvents) || !djangoBubbleEvents.length) return [];
 
     const grouped = new Map<string, GymSlot>();
 
-    for (const event of djangoBubbleEvents) {
-      const day = event.event?.day?.toUpperCase();
-      const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
-      const dayKey = day ? gymDayKeyMap[day] : undefined;
+    for (const item of djangoBubbleEvents) {
+      const eventObj = item.event || item;
+      const rawDay = (eventObj.day || "").toUpperCase().trim();
+      const slotKey = `${eventObj.start_time?.slice(0, 5) ?? "00:00"}-${eventObj.end_time?.slice(0, 5) ?? "00:00"}`;
+      
+      const dayKey = rawDay ? gymDayKeyMap[rawDay] || gymDayKeyMap[rawDay.slice(0, 3)] : undefined;
 
       if (!dayKey) continue;
 
@@ -102,9 +104,7 @@ export default function SchedulesPage() {
         sun: "",
       };
 
-      // determinces the displays of the inside of the grid slot e.g (FOOTBALL, VOLLEYBALL)
-
-      existing[dayKey] = event.name ?? "";
+      existing[dayKey] = item.name || item.title || "";
       grouped.set(slotKey, existing);
     }
 
@@ -120,16 +120,16 @@ export default function SchedulesPage() {
   // django gym-event data to front end 
 
   const djangoGymSchedule = useMemo(() => {
-    if (!djangoGymEvents?.length) return [];
+    if (!Array.isArray(djangoGymEvents) || !djangoGymEvents.length) return [];
 
     const grouped = new Map<string, GymSlot>();
 
-    for (const event of djangoGymEvents) {
-
-      const day = event.event?.day?.toUpperCase();
-      const slotKey = `${event.event?.start_time?.slice(0, 5) ?? "00:00"}-${event.event?.end_time?.slice(0, 5) ?? "00:00"}`;
-      const dayKey = day ? gymDayKeyMap[day] : undefined;
-
+    for (const item of djangoGymEvents) {
+      const eventObj = item.event || item;
+      const rawDay = (eventObj.day || "").toUpperCase().trim();
+      const slotKey = `${eventObj.start_time?.slice(0, 5) ?? "00:00"}-${eventObj.end_time?.slice(0, 5) ?? "00:00"}`;
+      
+      const dayKey = rawDay ? gymDayKeyMap[rawDay] || gymDayKeyMap[rawDay.slice(0, 3)] : undefined;
 
       if (!dayKey) continue;
 
@@ -144,7 +144,7 @@ export default function SchedulesPage() {
         sun: "",
       };
 
-      existing[dayKey] = event.gender ?? "";
+      existing[dayKey] = item.gender ?? item.name ?? "";
       grouped.set(slotKey, existing);
     }
 
