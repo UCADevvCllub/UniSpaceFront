@@ -121,12 +121,14 @@ export default function LessonsPage() {
   // Groups the cohort dropdown by study year (Freshman -> Senior), CS before CM within each year
   const sortedCohorts = useMemo(() => {
     if (!cohorts) return [];
-    return [...cohorts].sort((a: any, b: any) => {
-      if (a.study_year_id !== b.study_year_id) return a.study_year_id - b.study_year_id;
-      return a.cohort_name === "CS" ? -1 : b.cohort_name === "CS" ? 1 : 0;
-    });
+    return [...cohorts]
+      .filter((c: any) => c.study_year_id >= 1 && c.study_year_id <= 4 && ["CS", "CM"].includes(c.cohort_name))
+      .sort((a: any, b: any) => {
+        if (a.study_year_id !== b.study_year_id) return a.study_year_id - b.study_year_id;
+        return a.cohort_name === "CS" ? -1 : b.cohort_name === "CS" ? 1 : 0;
+      });
   }, [cohorts]);
-  const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents});
+  const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -150,18 +152,18 @@ export default function LessonsPage() {
   const handleEditClick = (lesson: any) => {
     if (!isAdmin) return;
     setFormData({
-      subject_id: lesson.subjectId, 
+      subject_id: lesson.subjectId,
       instructor_id: lesson.instructorId,
       cohort_id: lesson.cohortId,
       room_id: lesson.roomId,
-      day: reverseDayMap[lesson.day] || "MON", 
+      day: reverseDayMap[lesson.day] || "MON",
       start_time: lesson.startTime,
       end_time: lesson.endTime
     });
     setEditingId(lesson.id);
     setIsModalOpen(true);
   };
-  
+
   // Function to open modal for ADDING
   const handleAddClick = () => {
     if (!isAdmin) return;
@@ -258,13 +260,13 @@ export default function LessonsPage() {
 
   const updateMutation = useMutation({
     //object containing both the ID and the Data
-    mutationFn: ({ id, data }: { id: string, data: typeof formData }) => 
+    mutationFn: ({ id, data }: { id: string, data: typeof formData }) =>
       updateClassEvent(id, data),
-      
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
       setIsModalOpen(false);
-      setEditingId(null); 
+      setEditingId(null);
       toast.success("Lesson updated successfully", {
         description: "The schedule has been updated.",
       });
@@ -275,7 +277,7 @@ export default function LessonsPage() {
       });
     }
   });
-// create button
+  // create button
   const createMutation = useMutation({
     mutationFn: async (newData: typeof formData) => {
       const payload = {
@@ -285,12 +287,12 @@ export default function LessonsPage() {
         room_id: parseInt(newData.room_id),
         event_data: {
           day: newData.day,
-          start_time: newData.start_time + ":00", 
+          start_time: newData.start_time + ":00",
           end_time: newData.end_time + ":00",
           status: "CLASS"
         }
       };
-    return djangoApi.post(`/api/class-events/`, payload);
+      return djangoApi.post(`/api/class-events/`, payload);
     },
 
 
@@ -308,18 +310,18 @@ export default function LessonsPage() {
     }
   });
 
-// delete button
-const deleteMutation = useMutation({
-  mutationFn: (id: string) => deleteClassEvent(id),
-  onSuccess: () => {
-    // refresher
-    queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
-    setStatus("Lesson deleted successfully");
-  },
-  onError: (error) => {
-    console.error("Delete failed:", error);
-    setStatus("Failed to delete lesson");
-  }
+  // delete button
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteClassEvent(id),
+    onSuccess: () => {
+      // refresher
+      queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
+      setStatus("Lesson deleted successfully");
+    },
+    onError: (error) => {
+      console.error("Delete failed:", error);
+      setStatus("Failed to delete lesson");
+    }
   });
 
   const handleDelete = (id: string) => {
@@ -328,7 +330,7 @@ const deleteMutation = useMutation({
       deleteMutation.mutate(id);
     }
   };
-  
+
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
 
 
@@ -348,245 +350,255 @@ const deleteMutation = useMutation({
     console.log(`Filtering for ${activeGroup} (ID: ${targetId}). Found:`, result.length);
     return result;
   }, [djangoData, activeGroup]);
-  
+
 
 
   return (
     <>
-    <section className="space-y-4">
-      <h1 className="text-2xl font-bold">Lessons</h1>
+      <section className="space-y-4">
+        <h1 className="text-2xl font-bold">Lessons</h1>
 
-      {/* --- NAVBAR --- */}
-      <div className="flex flex-wrap gap-2">
-        {groups.map((group) => (
-          <button
-            key={group}
-            onClick={() => setActiveGroup(group)}
-            className={group === activeGroup 
-              ? "rounded-full bg-primary px-4 py-2 text-sm font-medium text-white shadow-md" 
-              : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"}
-          >
-            {group}
-          </button>
-        ))}
-        {isAdmin && (
-          <Button
-            onClick={handleAddClick}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
-          >
-            <span className="text-lg">+</span> Add Lesson
-          </Button>
-        )}
-      </div>
+        {/* --- NAVBAR --- */}
+        <div className="flex flex-wrap gap-2">
+          {groups.map((group) => (
+            <button
+              key={group}
+              onClick={() => setActiveGroup(group)}
+              className={group === activeGroup
+                ? "rounded-full bg-primary px-4 py-2 text-sm font-medium text-white shadow-md"
+                : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"}
+            >
+              {group}
+            </button>
+          ))}
+          {isAdmin && (
+            <Button
+              onClick={handleAddClick}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+            >
+              <span className="text-lg">+</span> Add Lesson
+            </Button>
+          )}
+        </div>
 
 
-      
-      {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) --- */}
-      {academicYearToId[activeGroup] && (
-        <Card className="p-6 border-slate-200 bg-slate-50/50">
-          <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
-          
-          <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
-            <div className="min-w-[1000px]">
-              {/* Header Days */}
-              <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
-                <div className="p-4 border-r border-slate-200 font-bold text-slate-400 text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
-                {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
-                  <div key={day} className="p-3 border-r border-slate-200 text-center last:border-r-0">
-                    <div className="font-bold text-slate-700">{day}</div>
-                    <div className="grid grid-cols-2 text-[9px] font-bold text-slate-400 mt-1">
-                      <div>CS / Science</div><div>CM / Arts</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Grid Body */}
-              <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[800px] bg-white">
-                {/* Time Axis */}
-                <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i} className="absolute w-full text-[11px] text-slate-400 font-bold pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
-                      {String(8 + i).padStart(2, '0')}:00
+        {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) --- */}
+        {academicYearToId[activeGroup] && (
+          <Card className="p-6 border-slate-200 bg-slate-50/50">
+            <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
+
+            <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
+              <div className="min-w-[1000px]">
+                {/* Header Days */}
+                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
+                  <div className="p-4 border-r border-slate-200 font-bold text-slate-400 text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
+                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
+                    <div key={day} className="p-3 border-r border-slate-200 text-center last:border-r-0">
+                      <div className="font-bold text-slate-700">{day}</div>
+                      <div className="grid grid-cols-2 text-[9px] font-bold text-slate-400 mt-1">
+                        <div>CS / Science</div><div>CM / Arts</div>
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Day Columns */}
-                {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
-                  <div
-                    key={day}
-                    data-day={day}
-                    className={`border-r border-slate-100 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
-                    onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
-                  >
-                    {/* Hour Lines */}
+                {/* Grid Body */}
+                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[800px] bg-white">
+                  {/* Time Axis */}
+                  <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
                     {Array.from({ length: 12 }).map((_, i) => (
-                      <div key={i} className="absolute w-full border-t border-slate-100" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
-                    ))}
-
-                    {/* Lessons */}
-                    {filteredSchedule.filter(l => l.day === day).map(lesson => (
-                      <LessonCard
-                        key={lesson.id}
-                        lesson={lesson}
-                        isAdmin={isAdmin}
-                        onEdit={handleEditClick}
-                        onDelete={handleDelete}
-                        onMove={applyLessonMove}
-                        onResize={applyLessonResize}
-                      />
+                      <div key={i} className="absolute w-full text-[11px] text-slate-400 font-bold pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
+                        {String(8 + i).padStart(2, '0')}:00
+                      </div>
                     ))}
                   </div>
-                ))}
+
+                  {/* Day Columns */}
+                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
+                    <div
+                      key={day}
+                      data-day={day}
+                      className={`border-r border-slate-100 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
+                      onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
+                    >
+                      {/* Hour Lines */}
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <div key={i} className="absolute w-full border-t border-slate-100" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
+                      ))}
+
+                      {/* Lessons */}
+                      {filteredSchedule.filter(l => l.day === day).map(lesson => (
+                        <LessonCard
+                          key={lesson.id}
+                          lesson={lesson}
+                          isAdmin={isAdmin}
+                          onEdit={handleEditClick}
+                          onDelete={handleDelete}
+                          onMove={applyLessonMove}
+                          onResize={applyLessonResize}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          {filteredSchedule.length === 0 && !isDjangoLoading && (
-            <p className="text-center text-slate-500 mt-4">No classes found in Django for this year.</p>
-          )}
-        </Card>
-      )}
-    </section>
-
-    <Toaster position="bottom-right" richColors />
-
-   {/* reponsible for the panel that appears */}
-   <AnimatePresence>
-    {isModalOpen && (
-        <div className="fixed inset-0  flex items-center justify-center z-[100] p-4">
-
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsModalOpen(false)} // Close when clicking outside
-            className="fixed inset-0"
-          />
-           
-           {/* 4. THE PANEL (Pops and Scales in) */}
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}    
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}    
-            transition={{ type: "spring", damping: 25, stiffness: 400 }} 
-            className="w-full max-w-md z-10"
-          >
-
-           
-
-          <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
-            <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
-            
-            <div className="grid gap-4">
-              {/* Subject */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-                <select 
-                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                  value={formData.subject_id}
-                  onChange={(e) => setFormData({...formData, subject_id: e.target.value})}
-                >
-                  <option value="">Select Subject</option>
-                  {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-
-              {/* Instructor */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
-                <select 
-                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                  value={formData.instructor_id}
-                  onChange={(e) => setFormData({...formData, instructor_id: e.target.value})}
-                >
-                  <option value="">Select Instructor</option>
-                  {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
-                </select>
-              </div>
-
-              {/* Day & Room */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Day</label>
-                  <select 
-                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                    value={formData.day}
-                    onChange={(e) => setFormData({...formData, day: e.target.value})}
-                  >
-                    <option value="MON">Monday</option>
-                    <option value="TUE">Tuesday</option>
-                    <option value="WED">Wednesday</option>
-                    <option value="THU">Thursday</option>
-                    <option value="FRI">Friday</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
-                  <select 
-                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                    value={formData.room_id}
-                    onChange={(e) => setFormData({...formData, room_id: e.target.value})}
-                  >
-                    <option value="">Select Room</option>
-                    {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Time */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Start Time</label>
-                  <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.start_time} onChange={(e) => setFormData({...formData, start_time: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">End Time</label>
-                  <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.end_time} onChange={(e) => setFormData({...formData, end_time: e.target.value})} />
-                </div>
-              </div>
-
-              {/* Cohort */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
-                <select 
-                  className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                  value={formData.cohort_id}
-                  onChange={(e) => setFormData({...formData, cohort_id: e.target.value})}
-                >
-                  <option value="">Select Cohort</option>
-                  {sortedCohorts.map((c: any) => <option key={c.id} value={c.id}>{c.cohort_name} (Year: {c.study_year_id})</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-
-              <Button
-            onClick={() => {
-              if (!isAdmin) return;
-              if (editingId) {
-                // Pass ID and the form data
-                updateMutation.mutate({ id: editingId, data: formData });
-              } else {
-                createMutation.mutate(formData);
-              }
-            }}
-            // Check mutation loading states
-            disabled={createMutation.isPending || updateMutation.isPending}
-            className="bg-indigo-600 text-white"
-          >
-            {editingId 
-              ? (updateMutation.isPending ? "Updating..." : "Update Lesson") 
-              : (createMutation.isPending ? "Saving..." : "Save Lesson")
-            }
-          </Button>
-            </div>
+            {filteredSchedule.length === 0 && !isDjangoLoading && (
+              <p className="text-center text-slate-500 mt-4">No classes found in Django for this year.</p>
+            )}
           </Card>
-          </motion.div>
-        </div>
-      )}
+        )}
+      </section>
+
+      <Toaster position="bottom-right" richColors />
+
+      {/* reponsible for the panel that appears */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0  flex items-center justify-center z-[100] p-4">
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)} // Close when clicking outside
+              className="fixed inset-0"
+            />
+
+            {/* 4. THE PANEL (Pops and Scales in) */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 400 }}
+              className="w-full max-w-md z-10"
+            >
+
+
+
+              <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
+                <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
+
+                <div className="grid gap-4">
+                  {/* Subject */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.subject_id}
+                      onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
+                    >
+                      <option value="">Select Subject</option>
+                      {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Instructor */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.instructor_id}
+                      onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
+                    >
+                      <option value="">Select Instructor</option>
+                      {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Day & Room */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Day</label>
+                      <select
+                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                        value={formData.day}
+                        onChange={(e) => setFormData({ ...formData, day: e.target.value })}
+                      >
+                        <option value="MON">Monday</option>
+                        <option value="TUE">Tuesday</option>
+                        <option value="WED">Wednesday</option>
+                        <option value="THU">Thursday</option>
+                        <option value="FRI">Friday</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
+                      <select
+                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                        value={formData.room_id}
+                        onChange={(e) => setFormData({ ...formData, room_id: e.target.value })}
+                      >
+                        <option value="">Select Room</option>
+                        {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Start Time</label>
+                      <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.start_time} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase">End Time</label>
+                      <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.end_time} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })} />
+                    </div>
+                  </div>
+
+                  {/* Cohort */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.cohort_id}
+                      onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
+                    >
+                      <option value="">Select Cohort</option>
+                      {(() => {
+                        const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
+                        const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
+                        return sortedCohorts
+                          .filter((c: any) => c.study_year_id === targetYearId)
+                          .map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.cohort_name}
+                            </option>
+                          ));
+                      })()}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6">
+                  <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+
+                  <Button
+                    onClick={() => {
+                      if (!isAdmin) return;
+                      if (editingId) {
+                        // Pass ID and the form data
+                        updateMutation.mutate({ id: editingId, data: formData });
+                      } else {
+                        createMutation.mutate(formData);
+                      }
+                    }}
+                    // Check mutation loading states
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    className="bg-indigo-600 text-white"
+                  >
+                    {editingId
+                      ? (updateMutation.isPending ? "Updating..." : "Update Lesson")
+                      : (createMutation.isPending ? "Saving..." : "Save Lesson")
+                    }
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </>
 
@@ -752,26 +764,26 @@ function LessonCard({
       <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
 
       {isAdmin && (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit(lesson);
-        }}
-        className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
-      >
-        <Pencil size={12} />
-      </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(lesson);
+          }}
+          className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
+        >
+          <Pencil size={12} />
+        </button>
       )}
       {isAdmin && (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(lesson.id);
-        }}
-        className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <Trash2 size={14} />
-      </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(lesson.id);
+          }}
+          className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Trash2 size={14} />
+        </button>
       )}
     </motion.div>
   );

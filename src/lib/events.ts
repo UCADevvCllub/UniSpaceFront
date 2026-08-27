@@ -274,7 +274,6 @@ export async function createBubbleEventDjango(data: {
   const response = await djangoApi.post(`/api/bubble-events/`, data);
   return response.data;
 }
-
 export async function patchBubbleEventDjango(
   id: number | string,
   data: Partial<{ name: string; event_data: Partial<{ day: string; start_time: string; end_time: string }> }>
@@ -282,11 +281,11 @@ export async function patchBubbleEventDjango(
   const response = await djangoApi.patch(`/api/bubble-events/${id}/`, data);
   return response.data;
 }
-
 export async function deleteBubbleEventDjango(id: number | string) {
   const response = await djangoApi.delete(`/api/bubble-events/${id}/`);
   return response.data;
 }
+
 
 
 
