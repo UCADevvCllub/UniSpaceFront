@@ -49,9 +49,10 @@ export function mapDjangoToUi(djangoEvents: any[]): any[] {
     yearId: ce.cohort_detail?.study_year_id,
 
     // Raw data
-    subjectId: ce.subject_id,      
+    subjectId: ce.subject_id,
     instructorId: ce.instructor_id,
     roomId: ce.room_id,
-    cohortId: ce.cohort_id
+    cohortId: ce.cohort_id,
+    linkedEventId: ce.linked_event_id != null ? String(ce.linked_event_id) : null
   }));
 }

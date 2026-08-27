@@ -8,7 +8,7 @@ import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
 
-import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
+import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteClassEvent } from "@/lib/events";
 import { updateClassEvent } from "@/lib/events";
@@ -60,7 +60,7 @@ function resolveSnappedTarget(lesson: any, info: PanInfo, dragStart: DragStart) 
   const impliedLeftPx = info.point.x - dragStart.grabOffsetX;
 
   const originIndex = DAY_ORDER.indexOf(lesson.day);
-  const baseLeftFraction = lesson.cohortColumn === "Cohort 2" ? 0.5 : 0;
+  const baseLeftFraction = lesson.isCombined ? 0 : (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0);
   const originCardLeftPx = dragStart.columnRect.left + baseLeftFraction * dragStart.columnRect.width;
   const deltaColumns = Math.round((impliedLeftPx - originCardLeftPx) / dragStart.columnRect.width);
   const targetIndex = Math.min(DAY_ORDER.length - 1, Math.max(0, originIndex + deltaColumns));
@@ -147,6 +147,10 @@ export default function LessonsPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  // When editing a combined (CS+CM) lesson, the twin row's id and its own cohort_id —
+  // needed so Save can PATCH both rows without overwriting the twin's cohort with ours.
+  const [editingPairedId, setEditingPairedId] = useState<string | null>(null);
+  const [editingPairedCohortId, setEditingPairedCohortId] = useState<string | null>(null);
 
 
   const handleEditClick = (lesson: any) => {
@@ -161,6 +165,8 @@ export default function LessonsPage() {
       end_time: lesson.endTime
     });
     setEditingId(lesson.id);
+    setEditingPairedId(lesson.isCombined ? lesson.pairedId : null);
+    setEditingPairedCohortId(lesson.isCombined ? lesson.pairedCohortId : null);
     setIsModalOpen(true);
   };
 
@@ -172,6 +178,8 @@ export default function LessonsPage() {
       day: "MON", start_time: "09:00", end_time: "10:30"
     });
     setEditingId(null);
+    setEditingPairedId(null);
+    setEditingPairedCohortId(null);
     setIsModalOpen(true);
   };
 
@@ -200,6 +208,8 @@ export default function LessonsPage() {
       end_time: endTime,
     });
     setEditingId(null);
+    setEditingPairedId(null);
+    setEditingPairedCohortId(null);
     setIsModalOpen(true);
   };
 
@@ -310,6 +320,40 @@ export default function LessonsPage() {
     }
   });
 
+  // create button (both CS and CM at once, linked)
+  const createLinkedMutation = useMutation({
+    mutationFn: async (newData: typeof formData) => {
+      const yearId = academicYearToId[activeGroup];
+      const yearCohorts = sortedCohorts.filter((c: any) => c.study_year_id === yearId);
+      const payload = {
+        subject_id: parseInt(newData.subject_id),
+        instructor_id: parseInt(newData.instructor_id),
+        room_id: parseInt(newData.room_id),
+        cohort_ids: yearCohorts.map((c: any) => c.id),
+        event_data: {
+          day: newData.day,
+          start_time: newData.start_time + ":00",
+          end_time: newData.end_time + ":00",
+          status: "CLASS"
+        }
+      };
+      return djangoApi.post(`/api/class-events/create-linked/`, payload);
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
+      setIsModalOpen(false);
+      toast.success("Lesson created successfully", {
+        description: "The combined lesson has been created for both cohorts.",
+      });
+    },
+    onError: (error: any) => {
+      toast.error("Could not create lesson", {
+        description: "There might be a Lesson conflict.",
+      });
+    }
+  });
+
   // delete button
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteClassEvent(id),
@@ -347,8 +391,23 @@ export default function LessonsPage() {
     const targetId = academicYearToId[activeGroup];
 
     const result = mapped.filter(item => item.yearId === targetId);
-    console.log(`Filtering for ${activeGroup} (ID: ${targetId}). Found:`, result.length);
-    return result;
+
+    // Merge CS+CM linked pairs into a single full-width entry
+    const byId = new Map(result.map((l: any) => [l.id, l]));
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const lesson of result) {
+      if (seen.has(lesson.id)) continue;
+      const twin = lesson.linkedEventId ? byId.get(lesson.linkedEventId) : null;
+      if (twin) {
+        seen.add(lesson.id);
+        seen.add(twin.id);
+        merged.push({ ...lesson, isCombined: true, pairedId: twin.id, pairedCohortId: twin.cohortId });
+      } else {
+        merged.push(lesson);
+      }
+    }
+    return merged;
   }, [djangoData, activeGroup]);
 
 
@@ -454,26 +513,22 @@ export default function LessonsPage() {
       <Toaster position="bottom-right" richColors />
 
       {/* reponsible for the panel that appears */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0  flex items-center justify-center z-[100] p-4">
+      {isModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setIsModalOpen(false)} // Close when clicking outside
+          className="fixed inset-0  flex items-center justify-center z-[100] p-4"
+        >
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)} // Close when clicking outside
-              className="fixed inset-0"
-            />
-
-            {/* 4. THE PANEL (Pops and Scales in) */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 400 }}
-              className="w-full max-w-md z-10"
-            >
+          {/* 4. THE PANEL (Pops and Scales in) */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 400 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md z-10"
+          >
 
 
 
@@ -551,24 +606,31 @@ export default function LessonsPage() {
                   {/* Cohort */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
-                    <select
-                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                      value={formData.cohort_id}
-                      onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
-                    >
-                      <option value="">Select Cohort</option>
-                      {(() => {
-                        const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
-                        const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
-                        return sortedCohorts
-                          .filter((c: any) => c.study_year_id === targetYearId)
-                          .map((c: any) => (
-                            <option key={c.id} value={c.id}>
-                              {c.cohort_name}
-                            </option>
-                          ));
-                      })()}
-                    </select>
+                    {editingPairedId ? (
+                      <div className="w-full border border-slate-200 p-2 rounded-lg bg-slate-100 text-sm text-slate-500">
+                        Both CS and CM (linked)
+                      </div>
+                    ) : (
+                      <select
+                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                        value={formData.cohort_id}
+                        onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
+                      >
+                        <option value="">Select Cohort</option>
+                        {!editingId && <option value="BOTH">Both CS and CM</option>}
+                        {(() => {
+                          const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
+                          const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
+                          return sortedCohorts
+                            .filter((c: any) => c.study_year_id === targetYearId)
+                            .map((c: any) => (
+                              <option key={c.id} value={c.id}>
+                                {c.cohort_name}
+                              </option>
+                            ));
+                        })()}
+                      </select>
+                    )}
                   </div>
                 </div>
 
@@ -581,25 +643,32 @@ export default function LessonsPage() {
                       if (editingId) {
                         // Pass ID and the form data
                         updateMutation.mutate({ id: editingId, data: formData });
+                        if (editingPairedId) {
+                          updateMutation.mutate({
+                            id: editingPairedId,
+                            data: { ...formData, cohort_id: editingPairedCohortId ?? formData.cohort_id },
+                          });
+                        }
+                      } else if (formData.cohort_id === "BOTH") {
+                        createLinkedMutation.mutate(formData);
                       } else {
                         createMutation.mutate(formData);
                       }
                     }}
                     // Check mutation loading states
-                    disabled={createMutation.isPending || updateMutation.isPending}
+                    disabled={createMutation.isPending || updateMutation.isPending || createLinkedMutation.isPending}
                     className="bg-indigo-600 text-white"
                   >
                     {editingId
                       ? (updateMutation.isPending ? "Updating..." : "Update Lesson")
-                      : (createMutation.isPending ? "Saving..." : "Save Lesson")
+                      : ((createMutation.isPending || createLinkedMutation.isPending) ? "Saving..." : "Save Lesson")
                     }
                   </Button>
                 </div>
               </Card>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          </motion.div>
+        </motion.div>
+      )}
     </>
 
   );
@@ -644,7 +713,8 @@ function LessonCard({
   const endMins = timeToMinutes(lesson.endTime);
   const top = percentOfCalendar(startMins);
   const height = percentOfCalendar(endMins) - percentOfCalendar(startMins);
-  const left = lesson.cohortColumn === "Cohort 2" ? "50%" : "0%";
+  const left = lesson.isCombined ? "0%" : (lesson.cohortColumn === "Cohort 2" ? "50%" : "0%");
+  const width = lesson.isCombined ? "100%" : "50%";
 
   const topMV = useMotionValue(`${top}%`);
   const heightMV = useMotionValue(`${height}%`);
@@ -660,19 +730,19 @@ function LessonCard({
     topMV.set(`${top}%`);
     heightMV.set(`${height}%`);
     setResizePreview(null);
-  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.cohortColumn, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
+  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.cohortColumn, lesson.isCombined, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
 
   return (
     <motion.div
       drag={isAdmin}
       dragMomentum={false}
-      style={{ top: topMV, height: heightMV, left, width: "50%", x: dragX, y: dragY }}
+      style={{ top: topMV, height: heightMV, left, width, x: dragX, y: dragY }}
       onDragStart={(event, info) => {
         const columnEl = document.querySelector(`[data-day="${lesson.day}"]`);
         if (!(columnEl instanceof HTMLElement)) return;
         const columnRect = columnEl.getBoundingClientRect();
         const cardTopPx = columnRect.top + (top / 100) * columnRect.height;
-        const cardLeftPx = columnRect.left + (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0) * columnRect.width;
+        const cardLeftPx = columnRect.left + (lesson.isCombined ? 0 : (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0)) * columnRect.width;
         dragStartRef.current = {
           grabOffsetX: info.point.x - cardLeftPx,
           grabOffsetY: info.point.y - cardTopPx,
@@ -705,7 +775,11 @@ function LessonCard({
         });
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute p-2 rounded border-l-4 shadow-sm bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700 z-10 group hover:z-20 active:z-30 ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`absolute p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${
+        lesson.isCombined
+          ? "bg-purple-50 border-purple-200 border-l-purple-500 text-purple-700"
+          : "bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700"
+      } ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       {isAdmin && (["start", "end"] as const).map((edge) => {
         const handleY = edge === "start" ? startHandleY : endHandleY;
@@ -759,9 +833,12 @@ function LessonCard({
           </motion.div>
         );
       })}
-      <div className="text-[10px] font-bold truncate">{lesson.title}</div>
+      <div className="text-[10px] font-bold truncate">
+        {lesson.title}{lesson.isCombined && <span className="ml-1 font-semibold opacity-70">(CS + CM)</span>}
+      </div>
       <div className="text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
-      <div className="text-[9px] font-bold mt-1 uppercase text-indigo-900">{lesson.room}</div>
+      <div className="text-[9px] font-medium truncate">{lesson.instructor}</div>
+      <div className={`text-[9px] font-bold mt-1 uppercase ${lesson.isCombined ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
 
       {isAdmin && (
         <button
