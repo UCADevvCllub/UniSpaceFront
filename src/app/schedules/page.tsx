@@ -88,7 +88,7 @@ export default function SchedulesPage() {
       const eventObj = item.event || item;
       const rawDay = (eventObj.day || "").toUpperCase().trim();
       const slotKey = `${eventObj.start_time?.slice(0, 5) ?? "00:00"}-${eventObj.end_time?.slice(0, 5) ?? "00:00"}`;
-      
+
       const dayKey = rawDay ? gymDayKeyMap[rawDay] || gymDayKeyMap[rawDay.slice(0, 3)] : undefined;
 
       if (!dayKey) continue;
@@ -128,7 +128,7 @@ export default function SchedulesPage() {
       const eventObj = item.event || item;
       const rawDay = (eventObj.day || "").toUpperCase().trim();
       const slotKey = `${eventObj.start_time?.slice(0, 5) ?? "00:00"}-${eventObj.end_time?.slice(0, 5) ?? "00:00"}`;
-      
+
       const dayKey = rawDay ? gymDayKeyMap[rawDay] || gymDayKeyMap[rawDay.slice(0, 3)] : undefined;
 
       if (!dayKey) continue;
@@ -311,7 +311,7 @@ export default function SchedulesPage() {
             } else {
               deletedCount++;
               requests.push(deleteGymEventDjango(existingEvent.id));
-            } 
+            }
             // If event does not exist POST
           } else if (genderVal) {
             createdCount++;
@@ -602,7 +602,7 @@ export default function SchedulesPage() {
       )}
 
       {activeTab === "Gym" && (
-        <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6 overflow-x-auto">
+        <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
           {isDjangoLoading && <p className="text-sm text-slate-500">Loading gym endpoint data...</p>}
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Gym Weekly Schedule</h2>
@@ -623,74 +623,76 @@ export default function SchedulesPage() {
             )}
           </div>
 
-          <table className="w-full min-w-[800px] border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="border border-slate-300 bg-slate-200 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
-                {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
-                  <th key={day} className="border border-slate-300 bg-orange-200 p-2 text-center font-bold text-slate-800">{day}</th>
-                ))}
-                {isEditingGym && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {(isEditingGym ? gymForm : gymSchedule).map((slot, rowIndex) => {
-                const getBgColor = (val: string) => {
-                  const v = val.toUpperCase().trim();
-                  if (v === "FEMALE") return "bg-pink-500 text-white font-bold";
-                  if (v === "MALE") return "bg-blue-600 text-white font-bold";
-                  if (v === "CLEANING") return "bg-red-600 text-white font-bold";
-                  if (v.includes("FACULTY") || v.includes("OPS")) return "bg-green-500 text-white font-bold";
-                  return "bg-slate-100";
-                };
+          <div className="-mx-6 overflow-x-auto">
+            <table className="w-full min-w-[800px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="border border-slate-300 bg-slate-200 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
+                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
+                    <th key={day} className="border border-slate-300 bg-orange-200 p-2 text-center font-bold text-slate-800">{day}</th>
+                  ))}
+                  {isEditingGym && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {(isEditingGym ? gymForm : gymSchedule).map((slot, rowIndex) => {
+                  const getBgColor = (val: string) => {
+                    const v = val.toUpperCase().trim();
+                    if (v === "FEMALE") return "bg-pink-500 text-white font-bold";
+                    if (v === "MALE") return "bg-blue-600 text-white font-bold";
+                    if (v === "CLEANING") return "bg-red-600 text-white font-bold";
+                    if (v.includes("FACULTY") || v.includes("OPS")) return "bg-green-500 text-white font-bold";
+                    return "bg-slate-100";
+                  };
 
-                const updateCell = (col: keyof GymSlot, value: string) => {
-                  const newForm = [...gymForm];
-                  newForm[rowIndex] = { ...newForm[rowIndex], [col]: value };
-                  setGymForm(newForm);
-                };
+                  const updateCell = (col: keyof GymSlot, value: string) => {
+                    const newForm = [...gymForm];
+                    newForm[rowIndex] = { ...newForm[rowIndex], [col]: value };
+                    setGymForm(newForm);
+                  };
 
-                const removeRow = () => {
-                  const newForm = [...gymForm];
-                  newForm.splice(rowIndex, 1);
-                  setGymForm(newForm);
-                };
+                  const removeRow = () => {
+                    const newForm = [...gymForm];
+                    newForm.splice(rowIndex, 1);
+                    setGymForm(newForm);
+                  };
 
-                return (
-                  <tr key={rowIndex}>
-                    <td className="border border-slate-300 bg-yellow-300 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
-                      {isEditingGym ? (
-                        <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
-                      ) : slot.time}
-                    </td>
-                    {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
-                      const val = slot[day];
-                      return (
-                        <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingGym ? getBgColor(val) : "bg-white"}`}>
-                          {isEditingGym ? (
-                            <input className="w-full px-1 text-center border border-slate-200 uppercase" value={val} onChange={(e) => updateCell(day, e.target.value)} />
-                          ) : (
-                            val.toUpperCase()
-                          )}
-                        </td>
-                      )
-                    })}
-                    {isEditingGym && (
-                      <td className="border border-slate-300 p-2 text-center bg-slate-50">
-                        <Button variant="outline" onClick={removeRow} className="h-6 w-6 p-0 text-red-500">X</Button>
+                  return (
+                    <tr key={rowIndex}>
+                      <td className="border border-slate-300 bg-yellow-300 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
+                        {isEditingGym ? (
+                          <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
+                        ) : slot.time}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
+                        const val = slot[day];
+                        return (
+                          <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingGym ? getBgColor(val) : "bg-white"}`}>
+                            {isEditingGym ? (
+                              <input className="w-full px-1 text-center border border-slate-200 uppercase" value={val} onChange={(e) => updateCell(day, e.target.value)} />
+                            ) : (
+                              val.toUpperCase()
+                            )}
+                          </td>
+                        )
+                      })}
+                      {isEditingGym && (
+                        <td className="border border-slate-300 p-2 text-center bg-slate-50">
+                          <Button variant="outline" onClick={removeRow} className="h-6 w-6 p-0 text-red-500">X</Button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {status && <p className="text-sm text-slate-600">{status}</p>}
         </Card>
       )}
 
       {activeTab === "Bubble" && (
-        <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6 overflow-x-auto">
+        <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
           {isBubbleLoading && <p className="text-sm text-slate-500">Loading bubble endpoint data...</p>}
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Bubble Weekly Schedule</h2>
@@ -711,78 +713,81 @@ export default function SchedulesPage() {
             )}
           </div>
 
-          <table className="w-full min-w-[800px] border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="border border-slate-300 bg-teal-300 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
-                {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
-                  <th key={day} className="border border-slate-300 bg-cyan-200 p-2 text-center font-bold text-slate-800">{day}</th>
-                ))}
-                {isEditingBubble && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {(isEditingBubble ? bubbleForm : bubbleSchedule).map((slot, rowIndex) => {
-                const getBubbleBgColor = (val: string) => {
-                  const v = val.toUpperCase().trim();
-                  if (v.includes("CLEANING")) return "bg-red-600 text-white font-bold";
-                  if (v.includes("ALTAI")) return "bg-slate-300 text-slate-900 font-bold";
-                  if (v === "TENNIS") return "bg-emerald-200 text-slate-900 font-bold";
-                  if (v === "MCHS") return "bg-teal-500 text-white font-bold";
-                  if (v === "FOOTBALL FEMALE") return "bg-pink-400 text-white font-bold";
-                  if (v.includes("JUDO")) return "bg-slate-400 text-white font-bold";
-                  if (v.includes("PHYSICAL")) return "bg-yellow-400 text-slate-900 font-bold";
-                  if (v === "CRICKET") return "bg-orange-300 text-slate-900 font-bold";
-                  if (v === "UCA SECURITY") return "bg-green-500 text-white font-bold";
-                  if (v === "VOLLEYBALL") return "bg-blue-600 text-white font-bold";
-                  if (v === "UCA FACULTY") return "bg-orange-200 text-slate-900 font-bold";
-                  if (v === "BASKETBALL") return "bg-purple-600 text-white font-bold";
-                  if (v === "FOOTBALL") return "bg-green-300 text-slate-900 font-bold";
-                  if (v.includes("MEP")) return "bg-amber-400 text-slate-900 font-bold";
-                  return "bg-white";
-                };
+          <div className="-mx-6 overflow-x-auto">
+            <table className="w-full min-w-[800px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="border border-slate-300 bg-teal-300 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
+                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
+                    <th key={day} className="border border-slate-300 bg-cyan-200 p-2 text-center font-bold text-slate-800">{day}</th>
+                  ))}
+                  {isEditingBubble && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {(isEditingBubble ? bubbleForm : bubbleSchedule).map((slot, rowIndex) => {
+                  const getBubbleBgColor = (val: string) => {
+                    const v = val.toUpperCase().trim();
+                    if (v.includes("CLEANING")) return "bg-red-600 text-white font-bold";
+                    if (v.includes("ALTAI")) return "bg-slate-300 text-slate-900 font-bold";
+                    if (v === "TENNIS") return "bg-emerald-200 text-slate-900 font-bold";
+                    if (v === "MCHS") return "bg-teal-500 text-white font-bold";
+                    if (v === "FOOTBALL FEMALE") return "bg-pink-400 text-white font-bold";
+                    if (v.includes("JUDO")) return "bg-slate-400 text-white font-bold";
+                    if (v === "PE" || v.includes("PHYSICAL")) return "bg-yellow-400 text-slate-900 font-bold";
+                    if (v === "BADMINTON") return "bg-indigo-400 text-white font-bold";
+                    if (v === "CRICKET") return "bg-orange-300 text-slate-900 font-bold";
+                    if (v.includes("SECURITY")) return "bg-green-500 text-white font-bold";
+                    if (v === "VOLLEYBALL") return "bg-blue-600 text-white font-bold";
+                    if (v === "UCA FACULTY") return "bg-orange-200 text-slate-900 font-bold";
+                    if (v === "BASKETBALL") return "bg-purple-600 text-white font-bold";
+                    if (v === "FOOTBALL") return "bg-green-300 text-slate-900 font-bold";
+                    if (v.includes("MEP")) return "bg-amber-400 text-slate-900 font-bold";
+                    return "bg-white";
+                  };
 
-                const updateCell = (col: keyof GymSlot, value: string) => {
-                  const newForm = [...bubbleForm];
-                  newForm[rowIndex] = { ...newForm[rowIndex], [col]: value };
-                  setBubbleForm(newForm);
-                };
+                  const updateCell = (col: keyof GymSlot, value: string) => {
+                    const newForm = [...bubbleForm];
+                    newForm[rowIndex] = { ...newForm[rowIndex], [col]: value };
+                    setBubbleForm(newForm);
+                  };
 
-                const removeRow = () => {
-                  const newForm = [...bubbleForm];
-                  newForm.splice(rowIndex, 1);
-                  setBubbleForm(newForm);
-                };
+                  const removeRow = () => {
+                    const newForm = [...bubbleForm];
+                    newForm.splice(rowIndex, 1);
+                    setBubbleForm(newForm);
+                  };
 
-                return (
-                  <tr key={rowIndex}>
-                    <td className="border border-slate-300 bg-teal-100 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
-                      {isEditingBubble ? (
-                        <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
-                      ) : slot.time}
-                    </td>
-                    {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
-                      const val = slot[day];
-                      return (
-                        <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingBubble ? getBubbleBgColor(val) : "bg-white"}`}>
-                          {isEditingBubble ? (
-                            <input className="w-full px-1 text-center border border-slate-200 uppercase text-xs" value={val} onChange={(e) => updateCell(day, e.target.value)} />
-                          ) : (
-                            <span className="text-xs tracking-tight">{val.toUpperCase()}</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                    {isEditingBubble && (
-                      <td className="border border-slate-300 p-2 text-center bg-slate-50">
-                        <Button variant="outline" onClick={removeRow} className="h-6 w-6 p-0 text-red-500">X</Button>
+                  return (
+                    <tr key={rowIndex}>
+                      <td className="border border-slate-300 bg-teal-100 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
+                        {isEditingBubble ? (
+                          <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
+                        ) : slot.time}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
+                        const val = slot[day];
+                        return (
+                          <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingBubble ? getBubbleBgColor(val) : "bg-white"}`}>
+                            {isEditingBubble ? (
+                              <input className="w-full px-1 text-center border border-slate-200 uppercase text-xs" value={val} onChange={(e) => updateCell(day, e.target.value)} />
+                            ) : (
+                              <span className="text-xs tracking-tight">{val.toUpperCase()}</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                      {isEditingBubble && (
+                        <td className="border border-slate-300 p-2 text-center bg-slate-50">
+                          <Button variant="outline" onClick={removeRow} className="h-6 w-6 p-0 text-red-500">X</Button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {status && <p className="text-sm text-slate-600">{status}</p>}
         </Card>
       )}
