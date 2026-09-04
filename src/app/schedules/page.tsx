@@ -624,14 +624,17 @@ export default function SchedulesPage() {
           </div>
 
           <div className="-mx-6 overflow-x-auto">
-            <table className="w-full min-w-[800px] border-collapse text-sm">
+            <table className="w-full min-w-[600px] sm:min-w-[800px] border-collapse text-xs sm:text-sm">
               <thead>
                 <tr>
-                  <th className="border border-slate-300 bg-slate-200 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
-                    <th key={day} className="border border-slate-300 bg-orange-200 p-2 text-center font-bold text-slate-800">{day}</th>
+                  <th className="border border-slate-300 bg-slate-200 p-1 sm:p-2 text-center font-bold text-slate-800 w-20 sm:w-32 sticky left-0 z-20">TIME</th>
+                  {(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const).map((day) => (
+                    <th key={day} className="border border-slate-300 bg-orange-200 p-1 sm:p-2 text-center font-bold text-slate-800">
+                      <span className="sm:hidden">{day}</span>
+                      <span className="hidden sm:inline">{{ MON: "MONDAY", TUE: "TUESDAY", WED: "WEDNESDAY", THU: "THURSDAY", FRI: "FRIDAY", SAT: "SATURDAY", SUN: "SUNDAY" }[day]}</span>
+                    </th>
                   ))}
-                  {isEditingGym && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
+                  {isEditingGym && <th className="border border-slate-300 bg-slate-200 p-1 sm:p-2"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -659,7 +662,7 @@ export default function SchedulesPage() {
 
                   return (
                     <tr key={rowIndex}>
-                      <td className="border border-slate-300 bg-yellow-300 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
+                      <td className="border border-slate-300 bg-yellow-300 p-1 sm:p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
                         {isEditingGym ? (
                           <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
                         ) : slot.time}
@@ -667,7 +670,7 @@ export default function SchedulesPage() {
                       {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
                         const val = slot[day];
                         return (
-                          <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingGym ? getBgColor(val) : "bg-white"}`}>
+                          <td key={day} className={`border border-slate-300 p-1 sm:p-2 text-center ${!isEditingGym ? getBgColor(val) : "bg-white"}`}>
                             {isEditingGym ? (
                               <input className="w-full px-1 text-center border border-slate-200 uppercase" value={val} onChange={(e) => updateCell(day, e.target.value)} />
                             ) : (
@@ -714,14 +717,17 @@ export default function SchedulesPage() {
           </div>
 
           <div className="-mx-6 overflow-x-auto">
-            <table className="w-full min-w-[800px] border-collapse text-sm">
+            <table className="w-full min-w-[600px] sm:min-w-[800px] border-collapse text-xs sm:text-sm">
               <thead>
                 <tr>
-                  <th className="border border-slate-300 bg-teal-300 p-2 text-center font-bold text-slate-800 w-32 sticky left-0 z-20">TIME</th>
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => (
-                    <th key={day} className="border border-slate-300 bg-cyan-200 p-2 text-center font-bold text-slate-800">{day}</th>
+                  <th className="border border-slate-300 bg-teal-300 p-1 sm:p-2 text-center font-bold text-slate-800 w-20 sm:w-32 sticky left-0 z-20">TIME</th>
+                  {(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const).map((day) => (
+                    <th key={day} className="border border-slate-300 bg-cyan-200 p-1 sm:p-2 text-center font-bold text-slate-800">
+                      <span className="sm:hidden">{day}</span>
+                      <span className="hidden sm:inline">{{ MON: "MONDAY", TUE: "TUESDAY", WED: "WEDNESDAY", THU: "THURSDAY", FRI: "FRIDAY", SAT: "SATURDAY", SUN: "SUNDAY" }[day]}</span>
+                    </th>
                   ))}
-                  {isEditingBubble && <th className="border border-slate-300 bg-slate-200 p-2"></th>}
+                  {isEditingBubble && <th className="border border-slate-300 bg-slate-200 p-1 sm:p-2"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -760,7 +766,7 @@ export default function SchedulesPage() {
 
                   return (
                     <tr key={rowIndex}>
-                      <td className="border border-slate-300 bg-teal-100 p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
+                      <td className="border border-slate-300 bg-teal-100 p-1 sm:p-2 text-center font-bold text-slate-900 whitespace-nowrap sticky left-0 z-10">
                         {isEditingBubble ? (
                           <input className="w-full px-1 text-center bg-white border border-slate-200" value={slot.time} onChange={(e) => updateCell("time", e.target.value)} />
                         ) : slot.time}
@@ -768,7 +774,7 @@ export default function SchedulesPage() {
                       {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => {
                         const val = slot[day];
                         return (
-                          <td key={day} className={`border border-slate-300 p-2 text-center ${!isEditingBubble ? getBubbleBgColor(val) : "bg-white"}`}>
+                          <td key={day} className={`border border-slate-300 p-1 sm:p-2 text-center ${!isEditingBubble ? getBubbleBgColor(val) : "bg-white"}`}>
                             {isEditingBubble ? (
                               <input className="w-full px-1 text-center border border-slate-200 uppercase text-xs" value={val} onChange={(e) => updateCell(day, e.target.value)} />
                             ) : (

@@ -448,26 +448,29 @@ export default function LessonsPage() {
             <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
             <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
-              <div className="min-w-[1000px]">
+              <div className="min-w-[750px] sm:min-w-[1000px]">
                 {/* Header Days */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
-                  <div className="p-4 border-r border-slate-200 font-bold text-slate-400 text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
+                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
+                  <div className="p-2 sm:p-4 border-r border-slate-200 font-bold text-slate-400 text-[9px] sm:text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
                   {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
-                    <div key={day} className="p-3 border-r border-slate-200 text-center last:border-r-0">
-                      <div className="font-bold text-slate-700">{day}</div>
-                      <div className="grid grid-cols-2 text-[9px] font-bold text-slate-400 mt-1">
-                        <div>CS / Science</div><div>CM / Arts</div>
+                    <div key={day} className="p-1.5 sm:p-3 border-r border-slate-200 text-center last:border-r-0">
+                      <div className="font-bold text-slate-700 text-[10px] sm:text-sm">
+                        <span className="sm:hidden">{day.slice(0, 3)}</span>
+                        <span className="hidden sm:inline">{day}</span>
+                      </div>
+                      <div className="grid grid-cols-2 text-[7px] sm:text-[9px] font-bold text-slate-400 mt-0.5 sm:mt-1">
+                        <div>CS</div><div>CM</div>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Grid Body */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[800px] bg-white">
+                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[600px] sm:h-[800px] bg-white">
                   {/* Time Axis */}
                   <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
                     {Array.from({ length: 12 }).map((_, i) => (
-                      <div key={i} className="absolute w-full text-[11px] text-slate-400 font-bold pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
+                      <div key={i} className="absolute w-full text-[8px] sm:text-[11px] text-slate-400 font-bold pr-1 sm:pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
                         {String(8 + i).padStart(2, '0')}:00
                       </div>
                     ))}
@@ -532,140 +535,140 @@ export default function LessonsPage() {
 
 
 
-              <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
-                <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
+            <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
+              <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
 
-                <div className="grid gap-4">
-                  {/* Subject */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-                    <select
-                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                      value={formData.subject_id}
-                      onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
-                    >
-                      <option value="">Select Subject</option>
-                      {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Instructor */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
-                    <select
-                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                      value={formData.instructor_id}
-                      onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
-                    >
-                      <option value="">Select Instructor</option>
-                      {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Day & Room */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Day</label>
-                      <select
-                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                        value={formData.day}
-                        onChange={(e) => setFormData({ ...formData, day: e.target.value })}
-                      >
-                        <option value="MON">Monday</option>
-                        <option value="TUE">Tuesday</option>
-                        <option value="WED">Wednesday</option>
-                        <option value="THU">Thursday</option>
-                        <option value="FRI">Friday</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
-                      <select
-                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                        value={formData.room_id}
-                        onChange={(e) => setFormData({ ...formData, room_id: e.target.value })}
-                      >
-                        <option value="">Select Room</option>
-                        {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Time */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Start Time</label>
-                      <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.start_time} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">End Time</label>
-                      <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.end_time} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })} />
-                    </div>
-                  </div>
-
-                  {/* Cohort */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
-                    {editingPairedId ? (
-                      <div className="w-full border border-slate-200 p-2 rounded-lg bg-slate-100 text-sm text-slate-500">
-                        Both CS and CM (linked)
-                      </div>
-                    ) : (
-                      <select
-                        className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                        value={formData.cohort_id}
-                        onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
-                      >
-                        <option value="">Select Cohort</option>
-                        {!editingId && <option value="BOTH">Both CS and CM</option>}
-                        {(() => {
-                          const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
-                          const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
-                          return sortedCohorts
-                            .filter((c: any) => c.study_year_id === targetYearId)
-                            .map((c: any) => (
-                              <option key={c.id} value={c.id}>
-                                {c.cohort_name}
-                              </option>
-                            ));
-                        })()}
-                      </select>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 mt-6">
-                  <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-
-                  <Button
-                    onClick={() => {
-                      if (!isAdmin) return;
-                      if (editingId) {
-                        // Pass ID and the form data
-                        updateMutation.mutate({ id: editingId, data: formData });
-                        if (editingPairedId) {
-                          updateMutation.mutate({
-                            id: editingPairedId,
-                            data: { ...formData, cohort_id: editingPairedCohortId ?? formData.cohort_id },
-                          });
-                        }
-                      } else if (formData.cohort_id === "BOTH") {
-                        createLinkedMutation.mutate(formData);
-                      } else {
-                        createMutation.mutate(formData);
-                      }
-                    }}
-                    // Check mutation loading states
-                    disabled={createMutation.isPending || updateMutation.isPending || createLinkedMutation.isPending}
-                    className="bg-indigo-600 text-white"
+              <div className="grid gap-4">
+                {/* Subject */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
+                  <select
+                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    value={formData.subject_id}
+                    onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
                   >
-                    {editingId
-                      ? (updateMutation.isPending ? "Updating..." : "Update Lesson")
-                      : ((createMutation.isPending || createLinkedMutation.isPending) ? "Saving..." : "Save Lesson")
-                    }
-                  </Button>
+                    <option value="">Select Subject</option>
+                    {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
-              </Card>
+
+                {/* Instructor */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
+                  <select
+                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    value={formData.instructor_id}
+                    onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
+                  >
+                    <option value="">Select Instructor</option>
+                    {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
+                  </select>
+                </div>
+
+                {/* Day & Room */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Day</label>
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.day}
+                      onChange={(e) => setFormData({ ...formData, day: e.target.value })}
+                    >
+                      <option value="MON">Monday</option>
+                      <option value="TUE">Tuesday</option>
+                      <option value="WED">Wednesday</option>
+                      <option value="THU">Thursday</option>
+                      <option value="FRI">Friday</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.room_id}
+                      onChange={(e) => setFormData({ ...formData, room_id: e.target.value })}
+                    >
+                      <option value="">Select Room</option>
+                      {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Time */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Start Time</label>
+                    <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.start_time} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">End Time</label>
+                    <input type="time" className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50" value={formData.end_time} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Cohort */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
+                  {editingPairedId ? (
+                    <div className="w-full border border-slate-200 p-2 rounded-lg bg-slate-100 text-sm text-slate-500">
+                      Both CS and CM (linked)
+                    </div>
+                  ) : (
+                    <select
+                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                      value={formData.cohort_id}
+                      onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
+                    >
+                      <option value="">Select Cohort</option>
+                      {!editingId && <option value="BOTH">Both CS and CM</option>}
+                      {(() => {
+                        const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
+                        const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
+                        return sortedCohorts
+                          .filter((c: any) => c.study_year_id === targetYearId)
+                          .map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.cohort_name}
+                            </option>
+                          ));
+                      })()}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+
+                <Button
+                  onClick={() => {
+                    if (!isAdmin) return;
+                    if (editingId) {
+                      // Pass ID and the form data
+                      updateMutation.mutate({ id: editingId, data: formData });
+                      if (editingPairedId) {
+                        updateMutation.mutate({
+                          id: editingPairedId,
+                          data: { ...formData, cohort_id: editingPairedCohortId ?? formData.cohort_id },
+                        });
+                      }
+                    } else if (formData.cohort_id === "BOTH") {
+                      createLinkedMutation.mutate(formData);
+                    } else {
+                      createMutation.mutate(formData);
+                    }
+                  }}
+                  // Check mutation loading states
+                  disabled={createMutation.isPending || updateMutation.isPending || createLinkedMutation.isPending}
+                  className="bg-indigo-600 text-white"
+                >
+                  {editingId
+                    ? (updateMutation.isPending ? "Updating..." : "Update Lesson")
+                    : ((createMutation.isPending || createLinkedMutation.isPending) ? "Saving..." : "Save Lesson")
+                  }
+                </Button>
+              </div>
+            </Card>
           </motion.div>
         </motion.div>
       )}
@@ -775,11 +778,10 @@ function LessonCard({
         });
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${
-        lesson.isCombined
+      className={`absolute p-1 sm:p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${lesson.isCombined
           ? "bg-purple-50 border-purple-200 border-l-purple-500 text-purple-700"
           : "bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700"
-      } ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
+        } ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       {isAdmin && (["start", "end"] as const).map((edge) => {
         const handleY = edge === "start" ? startHandleY : endHandleY;
@@ -833,12 +835,12 @@ function LessonCard({
           </motion.div>
         );
       })}
-      <div className="text-[10px] font-bold truncate">
-        {lesson.title}{lesson.isCombined && <span className="ml-1 font-semibold opacity-70">(CS + CM)</span>}
+      <div className="text-[8px] sm:text-[10px] font-bold truncate">
+        {lesson.title}{lesson.isCombined && <span className="ml-1 font-semibold opacity-70">(CS+CM)</span>}
       </div>
-      <div className="text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
-      <div className="text-[9px] font-medium truncate">{lesson.instructor}</div>
-      <div className={`text-[9px] font-bold mt-1 uppercase ${lesson.isCombined ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
+      <div className="text-[7px] sm:text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
+      <div className="text-[7px] sm:text-[9px] font-medium truncate">{lesson.instructor}</div>
+      <div className={`text-[7px] sm:text-[9px] font-bold mt-0.5 sm:mt-1 uppercase ${lesson.isCombined ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
 
       {isAdmin && (
         <button
@@ -848,7 +850,8 @@ function LessonCard({
           }}
           className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
         >
-          <Pencil size={12} />
+          <Pencil size={10} className="sm:hidden" />
+          <Pencil size={12} className="hidden sm:block" />
         </button>
       )}
       {isAdmin && (
@@ -859,7 +862,8 @@ function LessonCard({
           }}
           className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <Trash2 size={14} />
+          <Trash2 size={11} className="sm:hidden" />
+          <Trash2 size={14} className="hidden sm:block" />
         </button>
       )}
     </motion.div>
