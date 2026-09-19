@@ -45,7 +45,7 @@ export function TopHeader() {
       </div>
 
       <nav className="mx-auto w-full max-w-4xl px-4">
-        <ul className="flex flex-wrap gap-6 border-t border-slate-100 pt-3">
+        <ul className="flex justify-between border-t border-slate-100 pt-3">
           {menuItems.map((item) => {
             const active = pathname === item.href;
             return (
