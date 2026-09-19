@@ -33,7 +33,7 @@ type GroupLabel = (typeof groups)[number];
 
 
 const CALENDAR_START = 8 * 60;
-const CALENDAR_DURATION = (19 * 60) - CALENDAR_START;
+const CALENDAR_DURATION = (21 * 60) - CALENDAR_START;
 const DAY_ORDER = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
 
 const timeToMinutes = (time: string) => {
@@ -108,6 +108,23 @@ const academicYearToId: Record<string, number> = {
   "Senior": 4
 };
 
+// CS, CS_A, CS_B all share the CS half of the day column; same for CM's variants.
+const VALID_COHORT_NAMES = ["CS", "CM", "CS_A", "CS_B", "CM_A", "CM_B"];
+const isCsFamily = (cohortName: string) => cohortName.startsWith("CS");
+// Sort order within a family: plain cohort first, then A, then B.
+const cohortSubOrder = (cohortName: string) => {
+  if (cohortName.endsWith("_A")) return 1;
+  if (cohortName.endsWith("_B")) return 2;
+  return 0;
+};
+// The "A"/"B" badge shown on a card for a split cohort; null for a plain CS/CM lesson.
+const cohortLetter = (cohortName?: string) => {
+  if (!cohortName) return null;
+  if (cohortName.endsWith("_A")) return "A";
+  if (cohortName.endsWith("_B")) return "B";
+  return null;
+};
+
 
 
 
@@ -122,10 +139,11 @@ export default function LessonsPage() {
   const sortedCohorts = useMemo(() => {
     if (!cohorts) return [];
     return [...cohorts]
-      .filter((c: any) => c.study_year_id >= 1 && c.study_year_id <= 4 && ["CS", "CM"].includes(c.cohort_name))
+      .filter((c: any) => c.study_year_id >= 1 && c.study_year_id <= 4 && VALID_COHORT_NAMES.includes(c.cohort_name))
       .sort((a: any, b: any) => {
         if (a.study_year_id !== b.study_year_id) return a.study_year_id - b.study_year_id;
-        return a.cohort_name === "CS" ? -1 : b.cohort_name === "CS" ? 1 : 0;
+        if (isCsFamily(a.cohort_name) !== isCsFamily(b.cohort_name)) return isCsFamily(a.cohort_name) ? -1 : 1;
+        return cohortSubOrder(a.cohort_name) - cohortSubOrder(b.cohort_name);
       });
   }, [cohorts]);
   const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents });
@@ -193,11 +211,12 @@ export default function LessonsPage() {
     const startTime = minutesToTimeStr(CALENDAR_START + minutesFromStart);
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
-    // left half = CS, right half = CM, within the active tab's study year
+    // left half = CS (or CS_A/CS_B), right half = CM (or CM_A/CM_B), within the active tab's
+    // study year — defaults to the plain cohort since sortedCohorts sorts it first per family.
     const isCsHalf = offsetX < rect.width / 2;
     const studyYearId = academicYearToId[activeGroup];
     const cohort = sortedCohorts.find(
-      (c: any) => c.study_year_id === studyYearId && (c.cohort_name === "CS") === isCsHalf,
+      (c: any) => c.study_year_id === studyYearId && isCsFamily(c.cohort_name) === isCsHalf,
     );
 
     setFormData({
@@ -324,7 +343,10 @@ export default function LessonsPage() {
   const createLinkedMutation = useMutation({
     mutationFn: async (newData: typeof formData) => {
       const yearId = academicYearToId[activeGroup];
-      const yearCohorts = sortedCohorts.filter((c: any) => c.study_year_id === yearId);
+      // "Both" always links the plain CS+CM pair, never the A/B split cohorts.
+      const yearCohorts = sortedCohorts.filter(
+        (c: any) => c.study_year_id === yearId && (c.cohort_name === "CS" || c.cohort_name === "CM"),
+      );
       const payload = {
         subject_id: parseInt(newData.subject_id),
         instructor_id: parseInt(newData.instructor_id),
@@ -448,7 +470,7 @@ export default function LessonsPage() {
             <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
             <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
-              <div className="min-w-[1000px]">
+              <div className="min-w-[1550px]">
                 {/* Header Days */}
                 <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
                   <div className="p-4 border-r border-slate-200 font-bold text-slate-400 text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
@@ -463,10 +485,10 @@ export default function LessonsPage() {
                 </div>
 
                 {/* Grid Body */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[800px] bg-white">
+                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[945px] bg-white">
                   {/* Time Axis */}
                   <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
-                    {Array.from({ length: 12 }).map((_, i) => (
+                    {Array.from({ length: 14 }).map((_, i) => (
                       <div key={i} className="absolute w-full text-[11px] text-slate-400 font-bold pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
                         {String(8 + i).padStart(2, '0')}:00
                       </div>
@@ -482,7 +504,7 @@ export default function LessonsPage() {
                       onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
                     >
                       {/* Hour Lines */}
-                      {Array.from({ length: 12 }).map((_, i) => (
+                      {Array.from({ length: 14 }).map((_, i) => (
                         <div key={i} className="absolute w-full border-t border-slate-100" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
                       ))}
 
@@ -833,8 +855,12 @@ function LessonCard({
           </motion.div>
         );
       })}
-      <div className="text-[10px] font-bold truncate">
-        {lesson.title}{lesson.isCombined && <span className="ml-1 font-semibold opacity-70">(CS + CM)</span>}
+      <div className="flex items-baseline gap-1 text-[10px] font-bold">
+        <span className="min-w-0 truncate">{lesson.title}</span>
+        {lesson.isCombined && <span className="shrink-0 font-semibold opacity-70">(CS + CM)</span>}
+        {!lesson.isCombined && cohortLetter(lesson.cohortName) && (
+          <span className="shrink-0 font-semibold opacity-70">({cohortLetter(lesson.cohortName)})</span>
+        )}
       </div>
       <div className="text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[9px] font-medium truncate">{lesson.instructor}</div>

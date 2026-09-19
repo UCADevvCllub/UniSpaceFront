@@ -43,8 +43,10 @@ export function mapDjangoToUi(djangoEvents: any[]): any[] {
     title: ce.subject_detail?.name ?? "No Title",
     instructor: ce.instructor_detail ? `${ce.instructor_detail.first_name} ${ce.instructor_detail.last_name}` : "TBD",
     room: ce.room_detail?.room_number ?? "TBD",
-    // Column logic: CS/Arts = Column 1, CM/Science = Column 2
-    cohortColumn: ce.cohort_detail?.cohort_name === 'CS' ? 'Cohort 1' : 'Cohort 2',
+    // Column logic: CS/Arts = Column 1, CM/Science = Column 2 — CS_A/CS_B share CS's column,
+    // CM_A/CM_B share CM's column.
+    cohortColumn: ce.cohort_detail?.cohort_name?.startsWith('CS') ? 'Cohort 1' : 'Cohort 2',
+    cohortName: ce.cohort_detail?.cohort_name,
     // THIS IS THE CRITICAL PART: Match the ID from your Django JSON
     yearId: ce.cohort_detail?.study_year_id,
 
