@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { TopHeader } from "@/components/top-header";
+import { PageContainer } from "@/components/page-container";
 
 export const metadata: Metadata = {
   title: "UCA Campus Hub",
@@ -18,7 +19,7 @@ export default function RootLayout({
       <body>
         <Providers>
           <TopHeader />
-          <main className="mx-auto min-h-screen w-full max-w-4xl p-4">{children}</main>
+          <PageContainer>{children}</PageContainer>
         </Providers>
       </body>
     </html>

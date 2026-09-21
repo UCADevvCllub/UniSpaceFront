@@ -3,8 +3,9 @@ import { useState, useMemo, useRef, useLayoutEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fetchClassEvents, djangoApi } from "@/lib/events";
-import { mapDjangoToUi, formatEventTime } from "@/lib/utils";
+import { mapDjangoToUi, formatEventTime, yearColumns } from "@/lib/utils";
 import { finalExamsSchedule } from "./final-exams-data";
 import { useEvents } from "@/hooks/use-events";
 
@@ -60,7 +61,7 @@ function resolveSnappedTarget(lesson: any, info: PanInfo, dragStart: DragStart) 
   const impliedLeftPx = info.point.x - dragStart.grabOffsetX;
 
   const originIndex = DAY_ORDER.indexOf(lesson.day);
-  const baseLeftFraction = lesson.isCombined ? 0 : (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0);
+  const baseLeftFraction = lesson.isCombined ? 0 : lesson.columnIndex / lesson.columnCount;
   const originCardLeftPx = dragStart.columnRect.left + baseLeftFraction * dragStart.columnRect.width;
   const deltaColumns = Math.round((impliedLeftPx - originCardLeftPx) / dragStart.columnRect.width);
   const targetIndex = Math.min(DAY_ORDER.length - 1, Math.max(0, originIndex + deltaColumns));
@@ -108,22 +109,7 @@ const academicYearToId: Record<string, number> = {
   "Senior": 4
 };
 
-// CS, CS_A, CS_B all share the CS half of the day column; same for CM's variants.
-const VALID_COHORT_NAMES = ["CS", "CM", "CS_A", "CS_B", "CM_A", "CM_B"];
-const isCsFamily = (cohortName: string) => cohortName.startsWith("CS");
-// Sort order within a family: plain cohort first, then A, then B.
-const cohortSubOrder = (cohortName: string) => {
-  if (cohortName.endsWith("_A")) return 1;
-  if (cohortName.endsWith("_B")) return 2;
-  return 0;
-};
-// The "A"/"B" badge shown on a card for a split cohort; null for a plain CS/CM lesson.
-const cohortLetter = (cohortName?: string) => {
-  if (!cohortName) return null;
-  if (cohortName.endsWith("_A")) return "A";
-  if (cohortName.endsWith("_B")) return "B";
-  return null;
-};
+const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CM"];
 
 
 
@@ -134,16 +120,30 @@ export default function LessonsPage() {
   const { data: subjects } = useQuery({ queryKey: ["subjects"], queryFn: fetchSubjects });
   const { data: instructors } = useQuery({ queryKey: ["instructors"], queryFn: fetchInstructors });
   const { data: rooms } = useQuery({ queryKey: ["rooms"], queryFn: fetchRooms });
+  const subjectOptions = useMemo(
+    () => (subjects ?? []).map((s: any) => ({ value: String(s.id), label: s.name })),
+    [subjects],
+  );
+  const instructorOptions = useMemo(
+    () =>
+      (instructors ?? [])
+        .map((i: any) => ({ value: String(i.id), label: `${i.first_name} ${i.last_name}` }))
+        .sort((a: any, b: any) => a.label.localeCompare(b.label)),
+    [instructors],
+  );
+  const roomOptions = useMemo(
+    () => (rooms ?? []).map((r: any) => ({ value: String(r.id), label: r.room_number })),
+    [rooms],
+  );
   const { data: cohorts } = useQuery({ queryKey: ["cohorts"], queryFn: fetchCohorts });
-  // Groups the cohort dropdown by study year (Freshman -> Senior), CS before CM within each year
+  // Groups the cohorts by study year (Freshman -> Senior), in calendar column order within each year
   const sortedCohorts = useMemo(() => {
     if (!cohorts) return [];
     return [...cohorts]
-      .filter((c: any) => c.study_year_id >= 1 && c.study_year_id <= 4 && VALID_COHORT_NAMES.includes(c.cohort_name))
+      .filter((c: any) => c.study_year_id >= 1 && c.study_year_id <= 4 && COHORT_ORDER.includes(c.cohort_name))
       .sort((a: any, b: any) => {
         if (a.study_year_id !== b.study_year_id) return a.study_year_id - b.study_year_id;
-        if (isCsFamily(a.cohort_name) !== isCsFamily(b.cohort_name)) return isCsFamily(a.cohort_name) ? -1 : 1;
-        return cohortSubOrder(a.cohort_name) - cohortSubOrder(b.cohort_name);
+        return COHORT_ORDER.indexOf(a.cohort_name) - COHORT_ORDER.indexOf(b.cohort_name);
       });
   }, [cohorts]);
   const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents });
@@ -211,12 +211,12 @@ export default function LessonsPage() {
     const startTime = minutesToTimeStr(CALENDAR_START + minutesFromStart);
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
-    // left half = CS (or CS_A/CS_B), right half = CM (or CM_A/CM_B), within the active tab's
-    // study year — defaults to the plain cohort since sortedCohorts sorts it first per family.
-    const isCsHalf = offsetX < rect.width / 2;
+    // Which sub-column was clicked (CS A / CS B / CM on Freshman, CS / CM otherwise) decides the cohort.
     const studyYearId = academicYearToId[activeGroup];
+    const columns = yearColumns(studyYearId);
+    const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
     const cohort = sortedCohorts.find(
-      (c: any) => c.study_year_id === studyYearId && isCsFamily(c.cohort_name) === isCsHalf,
+      (c: any) => c.study_year_id === studyYearId && c.cohort_name === columns[columnIndex].cohort,
     );
 
     setFormData({
@@ -398,6 +398,7 @@ export default function LessonsPage() {
   };
 
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
+  const activeColumns = yearColumns(academicYearToId[activeGroup]);
 
 
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
@@ -470,7 +471,7 @@ export default function LessonsPage() {
             <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
             <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
-              <div className="min-w-[1550px]">
+              <div style={{ minWidth: activeColumns.length === 3 ? 2100 : 1550 }}>
                 {/* Header Days */}
                 <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
                   <div className="p-2 sm:p-4 border-r border-slate-200 font-bold text-slate-400 text-[9px] sm:text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
@@ -480,15 +481,18 @@ export default function LessonsPage() {
                         <span className="sm:hidden">{day.slice(0, 3)}</span>
                         <span className="hidden sm:inline">{day}</span>
                       </div>
-                      <div className="grid grid-cols-2 text-[7px] sm:text-[9px] font-bold text-slate-400 mt-0.5 sm:mt-1">
-                        <div>CS</div><div>CM</div>
+                      <div
+                        className="grid text-[7px] sm:text-[9px] font-bold text-slate-400 mt-0.5 sm:mt-1"
+                        style={{ gridTemplateColumns: `repeat(${activeColumns.length}, minmax(0, 1fr))` }}
+                      >
+                        {activeColumns.map((col) => <div key={col.cohort}>{col.label}</div>)}
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Grid Body */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[945px] bg-white">
+                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[945px] bg-white">
                   {/* Time Axis */}
                   <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
                     {Array.from({ length: 14 }).map((_, i) => (
@@ -503,12 +507,12 @@ export default function LessonsPage() {
                     <div
                       key={day}
                       data-day={day}
-                      className={`border-r border-slate-100 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
+                      className={`border-r border-slate-200 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
                       onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
                     >
                       {/* Hour Lines */}
                       {Array.from({ length: 14 }).map((_, i) => (
-                        <div key={i} className="absolute w-full border-t border-slate-100" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
+                        <div key={i} className="absolute w-full border-t border-slate-200" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
                       ))}
 
                       {/* Lessons */}
@@ -564,27 +568,27 @@ export default function LessonsPage() {
                 {/* Subject */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-                  <select
-                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                  <SearchableSelect
                     value={formData.subject_id}
-                    onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
-                  >
-                    <option value="">Select Subject</option>
-                    {subjects?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                    onChange={(v) => setFormData({ ...formData, subject_id: v })}
+                    options={subjectOptions}
+                    placeholder="Select Subject"
+                    searchPlaceholder="Search subjects..."
+                    emptyText="No subjects found"
+                  />
                 </div>
 
                 {/* Instructor */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">Instructor</label>
-                  <select
-                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                  <SearchableSelect
                     value={formData.instructor_id}
-                    onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
-                  >
-                    <option value="">Select Instructor</option>
-                    {instructors?.map((i: any) => <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>)}
-                  </select>
+                    onChange={(v) => setFormData({ ...formData, instructor_id: v })}
+                    options={instructorOptions}
+                    placeholder="Select Instructor"
+                    searchPlaceholder="Search instructors..."
+                    emptyText="No instructors found"
+                  />
                 </div>
 
                 {/* Day & Room */}
@@ -605,14 +609,14 @@ export default function LessonsPage() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase">Room</label>
-                    <select
-                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    <SearchableSelect
                       value={formData.room_id}
-                      onChange={(e) => setFormData({ ...formData, room_id: e.target.value })}
-                    >
-                      <option value="">Select Room</option>
-                      {rooms?.map((r: any) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-                    </select>
+                      onChange={(v) => setFormData({ ...formData, room_id: v })}
+                      options={roomOptions}
+                      placeholder="Select Room"
+                      searchPlaceholder="Search rooms..."
+                      emptyText="No rooms found"
+                    />
                   </div>
                 </div>
 
@@ -646,8 +650,10 @@ export default function LessonsPage() {
                       {(() => {
                         const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
                         const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
+                        const allowed = yearColumns(targetYearId).map((col) => col.cohort);
+                        // Also keep the lesson's current cohort (e.g. an older plain CS one) so editing shows it.
                         return sortedCohorts
-                          .filter((c: any) => c.study_year_id === targetYearId)
+                          .filter((c: any) => c.study_year_id === targetYearId && (allowed.includes(c.cohort_name) || c.id === selectedCohort?.id))
                           .map((c: any) => (
                             <option key={c.id} value={c.id}>
                               {c.cohort_name}
@@ -738,8 +744,9 @@ function LessonCard({
   const endMins = timeToMinutes(lesson.endTime);
   const top = percentOfCalendar(startMins);
   const height = percentOfCalendar(endMins) - percentOfCalendar(startMins);
-  const left = lesson.isCombined ? "0%" : (lesson.cohortColumn === "Cohort 2" ? "50%" : "0%");
-  const width = lesson.isCombined ? "100%" : "50%";
+  const leftFraction = lesson.isCombined ? 0 : lesson.columnIndex / lesson.columnCount;
+  const left = `${leftFraction * 100}%`;
+  const width = lesson.isCombined ? "100%" : `${100 / lesson.columnCount}%`;
 
   const topMV = useMotionValue(`${top}%`);
   const heightMV = useMotionValue(`${height}%`);
@@ -755,7 +762,7 @@ function LessonCard({
     topMV.set(`${top}%`);
     heightMV.set(`${height}%`);
     setResizePreview(null);
-  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.cohortColumn, lesson.isCombined, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
+  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.columnIndex, lesson.columnCount, lesson.isCombined, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
 
   return (
     <motion.div
@@ -767,7 +774,7 @@ function LessonCard({
         if (!(columnEl instanceof HTMLElement)) return;
         const columnRect = columnEl.getBoundingClientRect();
         const cardTopPx = columnRect.top + (top / 100) * columnRect.height;
-        const cardLeftPx = columnRect.left + (lesson.isCombined ? 0 : (lesson.cohortColumn === "Cohort 2" ? 0.5 : 0)) * columnRect.width;
+        const cardLeftPx = columnRect.left + leftFraction * columnRect.width;
         dragStartRef.current = {
           grabOffsetX: info.point.x - cardLeftPx,
           grabOffsetY: info.point.y - cardTopPx,
@@ -860,9 +867,6 @@ function LessonCard({
       <div className="flex items-baseline gap-1 text-[10px] font-bold">
         <span className="min-w-0 truncate">{lesson.title}</span>
         {lesson.isCombined && <span className="shrink-0 font-semibold opacity-70">(CS + CM)</span>}
-        {!lesson.isCombined && cohortLetter(lesson.cohortName) && (
-          <span className="shrink-0 font-semibold opacity-70">({cohortLetter(lesson.cohortName)})</span>
-        )}
       </div>
       <div className="text-[7px] sm:text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[7px] sm:text-[9px] font-medium truncate">{lesson.instructor}</div>
