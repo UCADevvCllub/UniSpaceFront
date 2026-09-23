@@ -465,8 +465,12 @@ export default function LessonsPage() {
 
 
 
-        {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) --- */}
+        {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) ---
+            Full-bleed: breaks out of the page's max-w-4xl column (which keeps the title/tabs
+            above aligned with the SCHEDULES/LESSONS/... links) so the wide calendar gets the
+            full viewport width instead of being squeezed into that same narrow column. */}
         {academicYearToId[activeGroup] && (
+          <div className="relative left-1/2 right-1/2 w-screen -mx-[50vw] px-4 sm:px-6 lg:px-10">
           <Card className="p-6 border-slate-200 bg-slate-50/50">
             <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
@@ -536,6 +540,7 @@ export default function LessonsPage() {
               <p className="text-center text-slate-500 mt-4">No classes found in Django for this year.</p>
             )}
           </Card>
+          </div>
         )}
       </section>
 
