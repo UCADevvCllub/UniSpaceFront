@@ -572,7 +572,7 @@ export default function SchedulesPage() {
               </div>
 
               {/* Morning Break */}
-              <div className="relative overflow-hidden rounded-2xl border border-green-100 bg-gradient-to-br from-green-50 to-green-100/50 p-4 sm:p-5 md:p-3 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:flex-col md:items-center md:justify-center md:text-center">
+              <div className="relative overflow-hidden rounded-2xl border border-green-100 bg-gradient-to-br from-green-50 to-green-100/50 p-4 sm:p-5 md:px-2 md:py-3 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:flex-col md:items-center md:justify-center md:text-center">
                 <div className="flex items-center gap-3 md:flex-col md:gap-0">
                   <div className="flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-full bg-green-500 text-white shadow-inner md:mb-2 shrink-0">
                     <Clock className="h-5 w-5 md:h-4 md:w-4" />
@@ -581,9 +581,16 @@ export default function SchedulesPage() {
                     <span className="md:hidden">Morning </span>Break
                   </h3>
                 </div>
-                <p className="text-sm sm:text-base md:text-xs font-semibold text-green-900 md:mt-1 whitespace-nowrap">
-                  {CANTEEN_SCHEDULE.morningBreak}
-                </p>
+                <div className="text-right md:text-center">
+                  <p className="md:hidden text-sm sm:text-base font-semibold text-green-900 whitespace-nowrap">
+                    {CANTEEN_SCHEDULE.morningBreak}
+                  </p>
+                  <div className="hidden md:flex md:flex-col md:items-center text-xs font-semibold text-green-900 leading-tight">
+                    <span>{CANTEEN_SCHEDULE.morningBreak.split(" - ")[0]}</span>
+                    <span className="text-[10px] text-green-700/80 leading-none my-0.5">–</span>
+                    <span>{CANTEEN_SCHEDULE.morningBreak.split(" - ")[1]}</span>
+                  </div>
+                </div>
               </div>
 
               {/* Lunch */}
@@ -602,7 +609,7 @@ export default function SchedulesPage() {
               </div>
 
               {/* Afternoon Break */}
-              <div className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-teal-100/50 p-4 sm:p-5 md:p-3 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:flex-col md:items-center md:justify-center md:text-center">
+              <div className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-teal-100/50 p-4 sm:p-5 md:px-2 md:py-3 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:flex-col md:items-center md:justify-center md:text-center">
                 <div className="flex items-center gap-3 md:flex-col md:gap-0">
                   <div className="flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-full bg-teal-500 text-white shadow-inner md:mb-2 shrink-0">
                     <Clock className="h-5 w-5 md:h-4 md:w-4" />
@@ -611,9 +618,16 @@ export default function SchedulesPage() {
                     <span className="md:hidden">Afternoon </span>Break
                   </h3>
                 </div>
-                <p className="text-sm sm:text-base md:text-xs font-semibold text-teal-900 md:mt-1 whitespace-nowrap">
-                  {CANTEEN_SCHEDULE.afternoonBreak}
-                </p>
+                <div className="text-right md:text-center">
+                  <p className="md:hidden text-sm sm:text-base font-semibold text-teal-900 whitespace-nowrap">
+                    {CANTEEN_SCHEDULE.afternoonBreak}
+                  </p>
+                  <div className="hidden md:flex md:flex-col md:items-center text-xs font-semibold text-teal-900 leading-tight">
+                    <span>{CANTEEN_SCHEDULE.afternoonBreak.split(" - ")[0]}</span>
+                    <span className="text-[10px] text-teal-700/80 leading-none my-0.5">–</span>
+                    <span>{CANTEEN_SCHEDULE.afternoonBreak.split(" - ")[1]}</span>
+                  </div>
+                </div>
               </div>
 
               {/* Dinner */}
