@@ -474,7 +474,7 @@ export default function LessonsPage() {
           <Card className="p-6 border-slate-200 bg-slate-50/50">
             <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
-            <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
+            <div className="overflow-x-auto overflow-y-hidden border border-slate-200 bg-white rounded-2xl shadow-sm">
               <div style={{ minWidth: activeColumns.length === 3 ? 2100 : 1550 }}>
                 {/* Header Days */}
                 <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">

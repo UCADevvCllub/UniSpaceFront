@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Coffee, Sun, Moon } from "lucide-react";
+import { Coffee, Sun, Moon, Clock } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -549,52 +549,125 @@ export default function SchedulesPage() {
       )}
 
       {activeTab === "Canteen" && (
-        <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
+        <Card className="space-y-6 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
           <h2 className="text-xl font-bold text-slate-900">Canteen Schedule</h2>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-orange-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow-inner">
-                  <Coffee className="h-5 w-5" />
+          {/* Weekday Schedule */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Weekday</h3>
+            <div className="grid gap-3 grid-cols-[2fr_1fr_2fr_1fr_2fr]">
+              {/* Breakfast */}
+              <div className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-orange-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow-inner">
+                    <Coffee className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-orange-950">Breakfast</h3>
                 </div>
-                <h3 className="text-lg font-bold text-orange-950">Breakfast</h3>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-orange-900">
+                    {CANTEEN_SCHEDULE.breakfastWeekday}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-orange-900">
-                  <span className="text-orange-700/80">Weekday:</span> {CANTEEN_SCHEDULE.breakfastWeekday}
-                </p>
-                <p className="text-sm font-medium text-orange-900">
-                  <span className="text-orange-700/80">Weekend:</span> {CANTEEN_SCHEDULE.breakfastWeekend}
-                </p>
+
+              {/* Morning Break */}
+              <div className="relative overflow-hidden rounded-2xl border border-green-100 bg-gradient-to-br from-green-50 to-green-100/50 p-3 shadow-sm transition-all hover:shadow-md flex flex-col items-center justify-center text-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500 text-white shadow-inner mb-2">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <h3 className="text-sm font-bold text-green-950 leading-tight">Break</h3>
+                <p className="text-xs font-semibold text-green-900 mt-1">{CANTEEN_SCHEDULE.morningBreak}</p>
+              </div>
+
+              {/* Lunch */}
+              <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-amber-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-inner">
+                    <Sun className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-amber-950">Lunch</h3>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-amber-900">
+                    {CANTEEN_SCHEDULE.lunch}
+                  </p>
+                </div>
+              </div>
+
+              {/* Afternoon Break */}
+              <div className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-teal-100/50 p-3 shadow-sm transition-all hover:shadow-md flex flex-col items-center justify-center text-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500 text-white shadow-inner mb-2">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <h3 className="text-sm font-bold text-teal-950 leading-tight">Break</h3>
+                <p className="text-xs font-semibold text-teal-900 mt-1">{CANTEEN_SCHEDULE.afternoonBreak}</p>
+              </div>
+
+              {/* Dinner */}
+              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white shadow-inner">
+                    <Moon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-indigo-950">Dinner</h3>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-indigo-900">
+                    {CANTEEN_SCHEDULE.dinner}
+                  </p>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-amber-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-inner">
-                  <Sun className="h-5 w-5" />
+          {/* Weekend Schedule */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Weekend</h3>
+            <div className="grid gap-3 grid-cols-3">
+              {/* Breakfast */}
+              <div className="relative overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-orange-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow-inner">
+                    <Coffee className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-orange-950">Breakfast</h3>
                 </div>
-                <h3 className="text-lg font-bold text-amber-950">Lunch</h3>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-orange-900">
+                    {CANTEEN_SCHEDULE.breakfastWeekend}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-amber-900">
-                  {CANTEEN_SCHEDULE.lunch}
-                </p>
-              </div>
-            </div>
 
-            <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white shadow-inner">
-                  <Moon className="h-5 w-5" />
+              {/* Lunch */}
+              <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-amber-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-inner">
+                    <Sun className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-amber-950">Lunch</h3>
                 </div>
-                <h3 className="text-lg font-bold text-indigo-950">Dinner</h3>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-amber-900">
+                    {CANTEEN_SCHEDULE.lunchWeekend}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-indigo-900">
-                  {CANTEEN_SCHEDULE.dinner}
-                </p>
+
+              {/* Dinner */}
+              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-white shadow-inner">
+                    <Moon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-indigo-950">Dinner</h3>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-indigo-900">
+                    {CANTEEN_SCHEDULE.dinnerWeekend}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
