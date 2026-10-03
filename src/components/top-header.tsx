@@ -27,25 +27,27 @@ export function TopHeader() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-4 py-4">
-        <Link href="/schedules" className="flex items-center gap-3">
-          <Image src={campusLogo} alt="Campus icon" className="h-8 w-8 rounded-sm object-contain" />
+      <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 sm:gap-4 px-3.5 py-3.5 sm:px-4 sm:py-4">
+        <Link href="/schedules" className="flex items-center gap-2.5 sm:gap-3">
+          <Image src={campusLogo} alt="Campus icon" className="h-[29px] w-[29px] sm:h-8 sm:w-8 rounded-sm object-contain" />
           <div>
-            <p className="text-lg font-bold uppercase tracking-wide text-slate-900">UCA Campus Hub</p>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Student Dashboard</p>
+            <p className="text-[16px] sm:text-lg font-bold uppercase tracking-wide text-slate-900 leading-tight sm:leading-normal">UCA Campus Hub</p>
+            <p className="text-[10.8px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] text-slate-500">Student Dashboard</p>
           </div>
         </Link>
         {user ? (
-          <Button variant="outline" onClick={logOut}>
+          <Button variant="outline" onClick={logOut} className="px-3.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm">
             Sign out
           </Button>
         ) : (
-          <Button onClick={signIn}>Admin sign in</Button>
+          <Button onClick={signIn} className="px-3.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm">
+            Admin sign in
+          </Button>
         )}
       </div>
 
-      <nav className="mx-auto w-full max-w-4xl px-4">
-        <ul className="flex justify-between border-t border-slate-100 pt-3">
+      <nav className="mx-auto w-full max-w-4xl px-3.5 sm:px-4">
+        <ul className="flex justify-between border-t border-slate-100 pt-2.5 sm:pt-3">
           {menuItems.map((item) => {
             const active = pathname === item.href;
             return (
@@ -53,7 +55,7 @@ export function TopHeader() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "inline-block border-b-2 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500",
+                    "inline-block border-b-2 pb-1.5 sm:pb-2 text-[12.6px] sm:text-sm font-semibold uppercase tracking-wide sm:tracking-wider text-slate-500",
                     active
                       ? "border-primary text-slate-900"
                       : "border-transparent hover:border-slate-300 hover:text-slate-700",

@@ -481,9 +481,14 @@ export default function SchedulesPage() {
     <section className="space-y-4">
       <h1 className="text-2xl font-bold">Schedules</h1>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2">
         {scheduleTabs.map((tab) => (
-          <Button key={tab} variant={tab === activeTab ? "default" : "outline"} onClick={() => setActiveTab(tab)}>
+          <Button
+            key={tab}
+            variant={tab === activeTab ? "default" : "outline"}
+            onClick={() => setActiveTab(tab)}
+            className="px-3.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm"
+          >
             {tab}
           </Button>
         ))}
