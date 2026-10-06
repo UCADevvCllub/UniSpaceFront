@@ -61,7 +61,7 @@ function resolveSnappedTarget(lesson: any, info: PanInfo, dragStart: DragStart) 
   const impliedLeftPx = info.point.x - dragStart.grabOffsetX;
 
   const originIndex = DAY_ORDER.indexOf(lesson.day);
-  const baseLeftFraction = lesson.isCombined ? 0 : lesson.columnIndex / lesson.columnCount;
+  const baseLeftFraction = (lesson.isCombined ? lesson.combinedColumnStart : lesson.columnIndex) / lesson.columnCount;
   const originCardLeftPx = dragStart.columnRect.left + baseLeftFraction * dragStart.columnRect.width;
   const deltaColumns = Math.round((impliedLeftPx - originCardLeftPx) / dragStart.columnRect.width);
   const targetIndex = Math.min(DAY_ORDER.length - 1, Math.max(0, originIndex + deltaColumns));
@@ -339,23 +339,22 @@ export default function LessonsPage() {
     }
   });
 
-  // create button (both CS and CM at once, linked)
+  // create button (two cohorts linked at once — CS+CM, or CS_A+CS_B on a split year)
   const createLinkedMutation = useMutation({
-    mutationFn: async (newData: typeof formData) => {
+    mutationFn: async ({ data, pair }: { data: typeof formData; pair: [string, string] }) => {
       const yearId = academicYearToId[activeGroup];
-      // "Both" always links the plain CS+CM pair, never the A/B split cohorts.
       const yearCohorts = sortedCohorts.filter(
-        (c: any) => c.study_year_id === yearId && (c.cohort_name === "CS" || c.cohort_name === "CM"),
+        (c: any) => c.study_year_id === yearId && pair.includes(c.cohort_name),
       );
       const payload = {
-        subject_id: parseInt(newData.subject_id),
-        instructor_id: parseInt(newData.instructor_id),
-        room_id: parseInt(newData.room_id),
+        subject_id: parseInt(data.subject_id),
+        instructor_id: parseInt(data.instructor_id),
+        room_id: parseInt(data.room_id),
         cohort_ids: yearCohorts.map((c: any) => c.id),
         event_data: {
-          day: newData.day,
-          start_time: newData.start_time + ":00",
-          end_time: newData.end_time + ":00",
+          day: data.day,
+          start_time: data.start_time + ":00",
+          end_time: data.end_time + ":00",
           status: "CLASS"
         }
       };
@@ -415,7 +414,8 @@ export default function LessonsPage() {
 
     const result = mapped.filter(item => item.yearId === targetId);
 
-    // Merge CS+CM linked pairs into a single full-width entry
+    // Merge linked pairs (CS+CM, or CS_A+CS_B on a split year) into one entry spanning
+    // just the columns the pair actually covers — not necessarily the whole day column.
     const byId = new Map(result.map((l: any) => [l.id, l]));
     const seen = new Set<string>();
     const merged: any[] = [];
@@ -425,7 +425,9 @@ export default function LessonsPage() {
       if (twin) {
         seen.add(lesson.id);
         seen.add(twin.id);
-        merged.push({ ...lesson, isCombined: true, pairedId: twin.id, pairedCohortId: twin.cohortId });
+        const combinedColumnStart = Math.min(lesson.columnIndex, twin.columnIndex);
+        const combinedColumnSpan = Math.abs(lesson.columnIndex - twin.columnIndex) + 1;
+        merged.push({ ...lesson, isCombined: true, pairedId: twin.id, pairedCohortId: twin.cohortId, combinedColumnStart, combinedColumnSpan });
       } else {
         merged.push(lesson);
       }
@@ -642,7 +644,10 @@ export default function LessonsPage() {
                   <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
                   {editingPairedId ? (
                     <div className="w-full border border-slate-200 p-2 rounded-lg bg-slate-100 text-sm text-slate-500">
-                      Both CS and CM (linked)
+                      {(() => {
+                        const name = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id))?.cohort_name ?? "";
+                        return name.startsWith("CS_") ? "Both CS A and CS B (linked)" : "Both CS and CM (linked)";
+                      })()}
                     </div>
                   ) : (
                     <select
@@ -652,6 +657,9 @@ export default function LessonsPage() {
                     >
                       <option value="">Select Cohort</option>
                       {!editingId && <option value="BOTH">Both CS and CM</option>}
+                      {!editingId && activeColumns.length === 3 && (
+                        <option value="BOTH_AB">Both CS A and CS B</option>
+                      )}
                       {(() => {
                         const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
                         const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
@@ -686,7 +694,9 @@ export default function LessonsPage() {
                         });
                       }
                     } else if (formData.cohort_id === "BOTH") {
-                      createLinkedMutation.mutate(formData);
+                      createLinkedMutation.mutate({ data: formData, pair: ["CS", "CM"] });
+                    } else if (formData.cohort_id === "BOTH_AB") {
+                      createLinkedMutation.mutate({ data: formData, pair: ["CS_A", "CS_B"] });
                     } else {
                       createMutation.mutate(formData);
                     }
@@ -749,9 +759,13 @@ function LessonCard({
   const endMins = timeToMinutes(lesson.endTime);
   const top = percentOfCalendar(startMins);
   const height = percentOfCalendar(endMins) - percentOfCalendar(startMins);
-  const leftFraction = lesson.isCombined ? 0 : lesson.columnIndex / lesson.columnCount;
+  // A combined lesson spans exactly the columns its two cohorts sit in (e.g. CS_A+CS_B
+  // covers 2 of Freshman's 3 columns, leaving CM's column alone) — not always the full width.
+  const colStart = lesson.isCombined ? lesson.combinedColumnStart : lesson.columnIndex;
+  const colSpan = lesson.isCombined ? lesson.combinedColumnSpan : 1;
+  const leftFraction = colStart / lesson.columnCount;
   const left = `${leftFraction * 100}%`;
-  const width = lesson.isCombined ? "100%" : `${100 / lesson.columnCount}%`;
+  const width = `${(colSpan / lesson.columnCount) * 100}%`;
 
   const topMV = useMotionValue(`${top}%`);
   const heightMV = useMotionValue(`${height}%`);
@@ -767,7 +781,7 @@ function LessonCard({
     topMV.set(`${top}%`);
     heightMV.set(`${height}%`);
     setResizePreview(null);
-  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.columnIndex, lesson.columnCount, lesson.isCombined, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
+  }, [lesson.day, lesson.startTime, lesson.endTime, lesson.columnIndex, lesson.columnCount, lesson.isCombined, lesson.combinedColumnStart, lesson.combinedColumnSpan, dragX, dragY, startHandleY, endHandleY, topMV, heightMV, top, height]);
 
   return (
     <motion.div
@@ -871,7 +885,11 @@ function LessonCard({
       })}
       <div className="flex items-baseline gap-1 text-[10px] font-bold">
         <span className="min-w-0 truncate">{lesson.title}</span>
-        {lesson.isCombined && <span className="shrink-0 font-semibold opacity-70">(CS + CM)</span>}
+        {lesson.isCombined && (
+          <span className="shrink-0 font-semibold opacity-70">
+            {lesson.cohortName?.startsWith("CS_") ? "(CS A + CS B)" : "(CS + CM)"}
+          </span>
+        )}
       </div>
       <div className="text-[7px] sm:text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[7px] sm:text-[9px] font-medium truncate">{lesson.instructor}</div>
