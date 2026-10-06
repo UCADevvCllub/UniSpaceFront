@@ -106,7 +106,27 @@ const academicYearToId: Record<string, number> = {
   "Senior": 4
 };
 
+const yearIdToLabel: Record<number, GroupLabel> = {
+  1: "Freshman",
+  2: "Sophomore",
+  3: "Junior",
+  4: "Senior"
+};
+
 const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CM"];
+
+// "CS" or "CM" — the major a cohort belongs to (CS_A / CS_B are both CS)
+const majorOf = (cohortName: string) => (cohortName.startsWith("CM") ? "CM" : "CS");
+
+// The first message in a DRF 400 body, so the toast says what actually clashed
+const apiErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  if (data && typeof data === "object") {
+    const first = Object.values(data)[0];
+    return Array.isArray(first) ? String(first[0]) : String(first);
+  }
+  return fallback;
+};
 
 
 
@@ -161,26 +181,75 @@ export default function LessonsPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
-  // When editing a combined (CS+CM) lesson, the twin row's id and its own cohort_id —
-  // needed so Save can PATCH both rows without overwriting the twin's cohort with ours.
-  const [editingPairedId, setEditingPairedId] = useState<string | null>(null);
-  const [editingPairedCohortId, setEditingPairedCohortId] = useState<string | null>(null);
+  // Other study years this class is also taught to (same major), ticked in the form
+  const [extraYearIds, setExtraYearIds] = useState<number[]>([]);
+  // When editing: the cohort picker value the form opened with, and the class's cohort ids
+  // per year — so years/cohorts the admin didn't touch are saved exactly as they were.
+  const [editOriginal, setEditOriginal] = useState<{ cohortValue: string; byYear: Record<number, string[]> } | null>(null);
+
+  // Cohort ids of one major in one year, e.g. Freshman CS -> [CS_A, CS_B], Senior CS -> [CS]
+  const majorCohortIds = (yearId: number, major: string) => {
+    const names = yearColumns(yearId).map((col) => col.cohort).filter((name) => majorOf(name) === major);
+    return sortedCohorts
+      .filter((c: any) => c.study_year_id === yearId && names.includes(c.cohort_name))
+      .map((c: any) => String(c.id));
+  };
+
+  // Every cohort the class is for: the cohort(s) picked for the year being viewed, plus the
+  // same major(s) in each ticked extra year.
+  const buildCohortIds = (): string[] => {
+    const activeYearId = academicYearToId[activeGroup];
+    let current: string[];
+    if (editOriginal && formData.cohort_id === editOriginal.cohortValue) {
+      current = editOriginal.byYear[activeYearId] ?? [];
+    } else if (formData.cohort_id === "BOTH") {
+      current = [...majorCohortIds(activeYearId, "CS"), ...majorCohortIds(activeYearId, "CM")];
+    } else if (formData.cohort_id === "BOTH_AB") {
+      current = majorCohortIds(activeYearId, "CS");
+    } else {
+      current = formData.cohort_id ? [String(formData.cohort_id)] : [];
+    }
+    if (current.length === 0) throw new Error("Select a cohort first.");
+
+    const majors = new Set(
+      current.map((id) => majorOf(cohorts?.find((c: any) => String(c.id) === id)?.cohort_name ?? "")),
+    );
+    const ids = [...current];
+    for (const yearId of extraYearIds) {
+      const existing = editOriginal?.byYear[yearId];
+      if (existing?.length) {
+        ids.push(...existing);
+        continue;
+      }
+      for (const major of majors) {
+        const found = majorCohortIds(yearId, major);
+        if (found.length === 0) throw new Error(`There is no ${major} cohort for ${yearIdToLabel[yearId]}.`);
+        ids.push(...found);
+      }
+    }
+    return Array.from(new Set(ids));
+  };
 
 
   const handleEditClick = (lesson: any) => {
     if (!isAdmin) return;
+    // The cohort picker shows this year's part of the class: one cohort, or a "Both" option.
+    const yearPart: string[] = lesson.yearCohortIds ?? [String(lesson.cohortId)];
+    const yearNames = yearPart.map((id) => cohorts?.find((c: any) => String(c.id) === id)?.cohort_name ?? "");
+    const cohortValue = yearPart.length === 1 ? yearPart[0] : yearNames.some((n) => n.startsWith("CM")) ? "BOTH" : "BOTH_AB";
+
     setFormData({
       subject_id: lesson.subjectId,
       instructor_id: lesson.instructorId,
-      cohort_id: lesson.cohortId,
+      cohort_id: cohortValue,
       room_id: lesson.roomId,
       day: reverseDayMap[lesson.day] || "MON",
       start_time: lesson.startTime,
       end_time: lesson.endTime
     });
     setEditingId(lesson.id);
-    setEditingPairedId(lesson.isCombined ? lesson.pairedId : null);
-    setEditingPairedCohortId(lesson.isCombined ? lesson.pairedCohortId : null);
+    setEditOriginal({ cohortValue, byYear: lesson.groupByYear ?? { [lesson.yearId]: yearPart } });
+    setExtraYearIds(Object.keys(lesson.groupByYear ?? {}).map(Number).filter((y) => y !== lesson.yearId));
     setIsModalOpen(true);
   };
 
@@ -192,8 +261,8 @@ export default function LessonsPage() {
       day: "MON", start_time: "09:00", end_time: "10:30"
     });
     setEditingId(null);
-    setEditingPairedId(null);
-    setEditingPairedCohortId(null);
+    setEditOriginal(null);
+    setExtraYearIds([]);
     setIsModalOpen(true);
   };
 
@@ -223,8 +292,8 @@ export default function LessonsPage() {
       end_time: endTime,
     });
     setEditingId(null);
-    setEditingPairedId(null);
-    setEditingPairedCohortId(null);
+    setEditOriginal(null);
+    setExtraYearIds([]);
     setIsModalOpen(true);
   };
 
@@ -298,75 +367,37 @@ export default function LessonsPage() {
     },
     onError: (error: any) => {
       toast.error("Could not update lesson", {
-        description: "There might be a Lesson conflict.",
+        description: apiErrorMessage(error, "There might be a Lesson conflict."),
       });
     }
   });
-  // create button
-  const createMutation = useMutation({
-    mutationFn: async (newData: typeof formData) => {
-      const payload = {
-        subject_id: parseInt(newData.subject_id),
-        instructor_id: parseInt(newData.instructor_id),
-        cohort_id: parseInt(newData.cohort_id),
-        room_id: parseInt(newData.room_id),
-        event_data: {
-          day: newData.day,
-          start_time: newData.start_time + ":00",
-          end_time: newData.end_time + ":00",
-          status: "CLASS"
-        }
-      };
-      return djangoApi.post(`/api/class-events/`, payload);
-    },
-
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
-      setIsModalOpen(false);
-      toast.success("Lesson created successfully", {
-        description: "The Lesson has been created.",
-      });
-    },
-    onError: (error: any) => {
-      toast.error("Could not create lesson", {
-        description: "There might be a Lesson conflict.",
-      });
-    }
-  });
-
-  // create button (two cohorts linked at once — CS+CM, or CS_A+CS_B on a split year)
-  const createLinkedMutation = useMutation({
-    mutationFn: async ({ data, pair }: { data: typeof formData; pair: [string, string] }) => {
-      const yearId = academicYearToId[activeGroup];
-      const yearCohorts = sortedCohorts.filter(
-        (c: any) => c.study_year_id === yearId && pair.includes(c.cohort_name),
-      );
+  // Add / Edit form save: one request for the whole class, whichever cohorts and years it covers
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, data, cohortIds }: { id: string | null; data: typeof formData; cohortIds: string[] }) => {
       const payload = {
         subject_id: parseInt(data.subject_id),
         instructor_id: parseInt(data.instructor_id),
         room_id: parseInt(data.room_id),
-        cohort_ids: yearCohorts.map((c: any) => c.id),
+        cohort_ids: cohortIds.map((c) => parseInt(c)),
         event_data: {
           day: data.day,
-          start_time: data.start_time + ":00",
-          end_time: data.end_time + ":00",
+          start_time: data.start_time.slice(0, 5) + ":00",
+          end_time: data.end_time.slice(0, 5) + ":00",
           status: "CLASS"
         }
       };
-      return djangoApi.post(`/api/class-events/create-linked/`, payload);
+      return id ? djangoApi.patch(`/api/class-events/${id}/`, payload) : djangoApi.post(`/api/class-events/`, payload);
     },
 
-    onSuccess: () => {
+    onSuccess: (_res, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["django-class-events"] });
       setIsModalOpen(false);
-      toast.success("Lesson created successfully", {
-        description: "The combined lesson has been created for both cohorts.",
-      });
+      setEditingId(null);
+      toast.success(id ? "Lesson updated successfully" : "Lesson created successfully");
     },
-    onError: (error: any) => {
-      toast.error("Could not create lesson", {
-        description: "There might be a Lesson conflict.",
+    onError: (error: any, { id }) => {
+      toast.error(id ? "Could not update lesson" : "Could not create lesson", {
+        description: apiErrorMessage(error, "There might be a Lesson conflict."),
       });
     }
   });
@@ -385,10 +416,13 @@ export default function LessonsPage() {
     }
   });
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (lesson: any) => {
     if (!isAdmin) return;
-    if (window.confirm("Are you sure you want to delete this lesson?")) {
-      deleteMutation.mutate(id);
+    const message = lesson.otherYears?.length
+      ? `This lesson is shared with ${lesson.otherYears.join(", ")}. Delete it for all of them?`
+      : "Are you sure you want to delete this lesson?";
+    if (window.confirm(message)) {
+      deleteMutation.mutate(lesson.id);
     }
   };
 
@@ -403,33 +437,46 @@ export default function LessonsPage() {
 
 
 
+  const allLessons = useMemo(() => (djangoData ? mapDjangoToUi(djangoData) : []), [djangoData]);
+
   const filteredSchedule = useMemo(() => {
-    if (!djangoData) return [];
-    const mapped = mapDjangoToUi(djangoData);
     const targetId = academicYearToId[activeGroup];
+    const groups = new Map<string, any[]>();
+    for (const l of allLessons) {
+      if (l.shareGroup) groups.set(l.shareGroup, [...(groups.get(l.shareGroup) ?? []), l]);
+    }
 
-    const result = mapped.filter(item => item.yearId === targetId);
-
-    // Merge linked pairs (CS+CM, or CS_A+CS_B on a split year) into one entry spanning
-    // just the columns the pair actually covers — not necessarily the whole day column.
-    const byId = new Map(result.map((l: any) => [l.id, l]));
-    const seen = new Set<string>();
+    // One card per class in this year: the rows of a shared class that sit in this year are
+    // merged into one entry spanning just the columns they cover (e.g. CS A + CS B), and the
+    // card knows which other years the class is shared with.
     const merged: any[] = [];
-    for (const lesson of result) {
-      if (seen.has(lesson.id)) continue;
-      const twin = lesson.linkedEventId ? byId.get(lesson.linkedEventId) : null;
-      if (twin) {
-        seen.add(lesson.id);
-        seen.add(twin.id);
-        const combinedColumnStart = Math.min(lesson.columnIndex, twin.columnIndex);
-        const combinedColumnSpan = Math.abs(lesson.columnIndex - twin.columnIndex) + 1;
-        merged.push({ ...lesson, isCombined: true, pairedId: twin.id, pairedCohortId: twin.cohortId, combinedColumnStart, combinedColumnSpan });
-      } else {
-        merged.push(lesson);
+    const seenGroups = new Set<string>();
+    for (const lesson of allLessons.filter((l) => l.yearId === targetId)) {
+      const members = lesson.shareGroup ? groups.get(lesson.shareGroup)! : [lesson];
+      if (lesson.shareGroup) {
+        if (seenGroups.has(lesson.shareGroup)) continue;
+        seenGroups.add(lesson.shareGroup);
       }
+      const here = members.filter((m) => m.yearId === targetId).sort((a, b) => a.columnIndex - b.columnIndex);
+      const groupByYear: Record<number, string[]> = {};
+      for (const m of members) (groupByYear[m.yearId] ??= []).push(String(m.cohortId));
+      const otherYears = Object.keys(groupByYear).map(Number).filter((y) => y !== targetId)
+        .sort((a, b) => a - b).map((y) => yearIdToLabel[y]).filter(Boolean);
+      const columns = here.map((m) => m.columnIndex);
+      const combinedColumnStart = Math.min(...columns);
+      merged.push({
+        ...lesson,
+        isCombined: here.length > 1,
+        combinedColumnStart,
+        combinedColumnSpan: Math.max(...columns) - combinedColumnStart + 1,
+        cohortLabel: here.map((m) => m.cohortName.replace("_", " ")).join(" + "),
+        yearCohortIds: here.map((m) => String(m.cohortId)),
+        groupByYear,
+        otherYears,
+      });
     }
     return merged;
-  }, [djangoData, activeGroup]);
+  }, [allLessons, activeGroup]);
 
 
 
@@ -565,7 +612,7 @@ export default function LessonsPage() {
 
 
             <Card className="w-full max-w-md p-6 space-y-4 bg-white shadow-2xl border-none">
-              <h2 className="text-xl font-bold text-slate-900">Add New Lesson</h2>
+              <h2 className="text-xl font-bold text-slate-900">{editingId ? "Edit Lesson" : "Add New Lesson"}</h2>
 
               <div className="grid gap-4">
                 {/* Subject */}
@@ -638,39 +685,55 @@ export default function LessonsPage() {
                 {/* Cohort */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
-                  {editingPairedId ? (
-                    <div className="w-full border border-slate-200 p-2 rounded-lg bg-slate-100 text-sm text-slate-500">
-                      {(() => {
-                        const name = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id))?.cohort_name ?? "";
-                        return name.startsWith("CS_") ? "Both CS A and CS B (linked)" : "Both CS and CM (linked)";
-                      })()}
-                    </div>
-                  ) : (
-                    <select
-                      className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                      value={formData.cohort_id}
-                      onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
-                    >
-                      <option value="">Select Cohort</option>
-                      {!editingId && <option value="BOTH">Both CS and CM</option>}
-                      {!editingId && activeColumns.length === 3 && (
-                        <option value="BOTH_AB">Both CS A and CS B</option>
-                      )}
-                      {(() => {
-                        const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
-                        const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
-                        const allowed = yearColumns(targetYearId).map((col) => col.cohort);
-                        // Also keep the lesson's current cohort (e.g. an older plain CS one) so editing shows it.
-                        return sortedCohorts
-                          .filter((c: any) => c.study_year_id === targetYearId && (allowed.includes(c.cohort_name) || c.id === selectedCohort?.id))
-                          .map((c: any) => (
-                            <option key={c.id} value={c.id}>
-                              {c.cohort_name}
-                            </option>
-                          ));
-                      })()}
-                    </select>
-                  )}
+                  <select
+                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
+                    value={formData.cohort_id}
+                    onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
+                  >
+                    <option value="">Select Cohort</option>
+                    <option value="BOTH">Both CS and CM</option>
+                    {activeColumns.length === 3 && (
+                      <option value="BOTH_AB">Both CS A and CS B</option>
+                    )}
+                    {(() => {
+                      const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
+                      const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
+                      const allowed = yearColumns(targetYearId).map((col) => col.cohort);
+                      // Also keep the lesson's current cohort (e.g. an older plain CS one) so editing shows it.
+                      return sortedCohorts
+                        .filter((c: any) => c.study_year_id === targetYearId && (allowed.includes(c.cohort_name) || c.id === selectedCohort?.id))
+                        .map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.cohort_name}
+                          </option>
+                        ));
+                    })()}
+                  </select>
+                </div>
+
+                {/* Other study years taking the same class (same major) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Also for other years</label>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {groups.filter((g) => g !== activeGroup).map((g) => {
+                      const yearId = academicYearToId[g];
+                      return (
+                        <label key={g} className="flex items-center gap-1.5 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={extraYearIds.includes(yearId)}
+                            onChange={(e) =>
+                              setExtraYearIds(e.target.checked
+                                ? [...extraYearIds, yearId]
+                                : extraYearIds.filter((y) => y !== yearId))
+                            }
+                          />
+                          {g}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-400">Adds the same major (CS or CM) in those years. Freshman CS means both CS A and CS B.</p>
                 </div>
               </div>
 
@@ -680,31 +743,20 @@ export default function LessonsPage() {
                 <Button
                   onClick={() => {
                     if (!isAdmin) return;
-                    if (editingId) {
-                      // Pass ID and the form data
-                      updateMutation.mutate({ id: editingId, data: formData });
-                      if (editingPairedId) {
-                        updateMutation.mutate({
-                          id: editingPairedId,
-                          data: { ...formData, cohort_id: editingPairedCohortId ?? formData.cohort_id },
-                        });
-                      }
-                    } else if (formData.cohort_id === "BOTH") {
-                      createLinkedMutation.mutate({ data: formData, pair: ["CS", "CM"] });
-                    } else if (formData.cohort_id === "BOTH_AB") {
-                      createLinkedMutation.mutate({ data: formData, pair: ["CS_A", "CS_B"] });
-                    } else {
-                      createMutation.mutate(formData);
+                    let cohortIds: string[];
+                    try {
+                      cohortIds = buildCohortIds();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Select a cohort first.");
+                      return;
                     }
+                    saveMutation.mutate({ id: editingId, data: formData, cohortIds });
                   }}
                   // Check mutation loading states
-                  disabled={createMutation.isPending || updateMutation.isPending || createLinkedMutation.isPending}
+                  disabled={saveMutation.isPending}
                   className="bg-indigo-600 text-white"
                 >
-                  {editingId
-                    ? (updateMutation.isPending ? "Updating..." : "Update Lesson")
-                    : ((createMutation.isPending || createLinkedMutation.isPending) ? "Saving..." : "Save Lesson")
-                  }
+                  {saveMutation.isPending ? "Saving..." : editingId ? "Update Lesson" : "Save Lesson"}
                 </Button>
               </div>
             </Card>
@@ -731,7 +783,7 @@ function LessonCard({
   lesson: any;
   isAdmin: boolean;
   onEdit: (lesson: any) => void;
-  onDelete: (id: string) => void;
+  onDelete: (lesson: any) => void;
   onMove: (lesson: any, target: { dayFull: string; time: string }, onRejected?: () => void) => void;
   onResize: (lesson: any, edge: "start" | "end", newTime: string, onRejected?: () => void) => void;
 }) {
@@ -760,6 +812,8 @@ function LessonCard({
   const colStart = lesson.isCombined ? lesson.combinedColumnStart : lesson.columnIndex;
   const colSpan = lesson.isCombined ? lesson.combinedColumnSpan : 1;
   const leftFraction = colStart / lesson.columnCount;
+  // Purple for any class taught to more than one cohort, in this year or across years
+  const isShared = lesson.isCombined || lesson.otherYears?.length > 0;
   const left = `${leftFraction * 100}%`;
   const width = `${(colSpan / lesson.columnCount) * 100}%`;
 
@@ -822,7 +876,7 @@ function LessonCard({
         });
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute p-1 sm:p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${lesson.isCombined
+      className={`absolute p-1 sm:p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${isShared
           ? "bg-purple-50 border-purple-200 border-l-purple-500 text-purple-700"
           : "bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700"
         } ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
@@ -882,14 +936,15 @@ function LessonCard({
       <div className="flex items-baseline gap-1 text-[10px] font-bold">
         <span className="min-w-0 truncate">{lesson.title}</span>
         {lesson.isCombined && (
-          <span className="shrink-0 font-semibold opacity-70">
-            {lesson.cohortName?.startsWith("CS_") ? "(CS A + CS B)" : "(CS + CM)"}
-          </span>
+          <span className="shrink-0 font-semibold opacity-70">({lesson.cohortLabel})</span>
         )}
       </div>
+      {lesson.otherYears?.length > 0 && (
+        <div className="text-[7px] sm:text-[9px] font-semibold truncate">Shared with: {lesson.otherYears.join(", ")}</div>
+      )}
       <div className="text-[7px] sm:text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
       <div className="text-[7px] sm:text-[9px] font-medium truncate">{lesson.instructor}</div>
-      <div className={`text-[7px] sm:text-[9px] font-bold mt-0.5 sm:mt-1 uppercase ${lesson.isCombined ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
+      <div className={`text-[7px] sm:text-[9px] font-bold mt-0.5 sm:mt-1 uppercase ${isShared ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
 
       {isAdmin && (
         <button
@@ -907,7 +962,7 @@ function LessonCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(lesson.id);
+            onDelete(lesson);
           }}
           className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
         >

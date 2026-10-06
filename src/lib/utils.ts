@@ -58,7 +58,8 @@ export function mapDjangoToUi(djangoEvents: any[]): any[] {
       instructorId: ce.instructor_id,
       roomId: ce.room_id,
       cohortId: ce.cohort_id,
-      linkedEventId: ce.linked_event_id != null ? String(ce.linked_event_id) : null
+      // Lessons sharing a shareGroup are one class taught to several cohorts/years
+      shareGroup: ce.share_group ?? null
     };
   });
 }
