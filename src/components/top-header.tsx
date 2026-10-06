@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
 import campusLogo from "../../photo/images.png";
@@ -18,12 +17,7 @@ const menuItems = [
 
 export function TopHeader() {
   const pathname = usePathname();
-  const { user, signIn, logOut, isAdmin } = useAuth();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const { user, signIn, logOut } = useAuth();
 
   return (
     <header className="border-b border-slate-200 bg-white">

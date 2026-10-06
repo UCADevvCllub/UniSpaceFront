@@ -6,9 +6,6 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
-import { useEvents } from "@/hooks/use-events";
-import { createScheduleEvent, deleteScheduleEvent, updateScheduleEvent } from "@/lib/admin-events";
-import { formatEventTime } from "@/lib/utils";
 import {
   fetchGymEvents,
   fetchBubbleEvents,
@@ -35,13 +32,6 @@ export type GymSlot = {
 const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
 type ScheduleTab = (typeof scheduleTabs)[number];
 
-function dateToInput(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
 const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
   MON: "mon",
   TUE: "tue",
@@ -56,19 +46,11 @@ export default function SchedulesPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ScheduleTab>("Canteen");
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isEditingGym, setIsEditingGym] = useState(false);
   const [gymForm, setGymForm] = useState<GymSlot[]>([]);
   const [isEditingBubble, setIsEditingBubble] = useState(false);
   const [bubbleForm, setBubbleForm] = useState<GymSlot[]>([]);
   const [status, setStatus] = useState("");
-  const [form, setForm] = useState({
-    title: "",
-    group: "All",
-    start: "",
-    end: "",
-    description: "",
-  });
 
 
 
@@ -151,87 +133,11 @@ export default function SchedulesPage() {
     return Array.from(grouped.values()).sort((a, b) => a.time.localeCompare(b.time));
   }, [djangoGymEvents]);
 
-  const facilities = useEvents({ type: "facility" });
-
 
   const gymSchedule = djangoGymSchedule.length > 0 ? djangoGymSchedule : [];
 
 
   const bubbleSchedule = djangoBubbleSchedule.length > 0 ? djangoBubbleSchedule : [];
-
-  const filteredEvents = useMemo(
-    () =>
-      (facilities.data ?? [])
-        .filter((event) => event.location.toLowerCase() === activeTab.toLowerCase())
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis()),
-    [activeTab, facilities.data],
-  );
-
-  const resetForm = () => {
-    setEditingEventId(null);
-    setStatus("");
-    setForm({ title: "", group: "All", start: "", end: "", description: "" });
-    setIsEditingGym(false);
-    setIsEditingBubble(false);
-  };
-
-  const startEdit = (event: (typeof filteredEvents)[number]) => {
-    setEditingEventId(event.id);
-    setForm({
-      title: event.title,
-      group: event.group,
-      start: dateToInput(event.start.toDate()),
-      end: dateToInput(event.end.toDate()),
-      description: event.description,
-    });
-  };
-
-  const saveEvent = async () => {
-    if (!isAdmin) return;
-    if (!form.title || !form.start || !form.end) {
-      setStatus("Title, start, and end are required.");
-      return;
-    }
-
-    const start = new Date(form.start);
-    const end = new Date(form.end);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      setStatus("Please provide a valid time range.");
-      return;
-    }
-
-    try {
-      const input = {
-        title: form.title,
-        type: "facility" as const,
-        location: activeTab,
-        group: form.group || "All",
-        start,
-        end,
-        description: form.description,
-      };
-
-      if (editingEventId) {
-        await updateScheduleEvent(editingEventId, input);
-        setStatus("Updated successfully.");
-      } else {
-        await createScheduleEvent(input);
-        setStatus("Created successfully.");
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      resetForm();
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save event.");
-    }
-  };
-
-  const removeEvent = async (eventId: string) => {
-    if (!isAdmin) return;
-    await deleteScheduleEvent(eventId);
-    await queryClient.invalidateQueries({ queryKey: ["events"] });
-    if (editingEventId === eventId) resetForm();
-  };
 
   useEffect(() => {
     setStatus("");
@@ -331,7 +237,6 @@ export default function SchedulesPage() {
       // For deleting the whole schedule row 
       for (const event of djangoGymEvents ?? []) {
         if (event.id && !handledEventIds.has(event.id)) {
-          const day = event.event?.day?.toUpperCase();
           const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
           const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
           const rowExists = gymForm.some((slot) => {
@@ -440,7 +345,6 @@ export default function SchedulesPage() {
 
       for (const event of djangoBubbleEvents ?? []) {
         if (event.id && !handledEventIds.has(event.id)) {
-          const day = event.event?.day?.toUpperCase();
           const startTime = padTime(event.event?.start_time?.slice(0, 5) ?? "");
           const endTime = padTime(event.event?.end_time?.slice(0, 5) ?? "");
           const rowExists = bubbleForm.some((slot) => {
@@ -488,65 +392,6 @@ export default function SchedulesPage() {
           </Button>
         ))}
       </div>
-
-      {isAdmin && activeTab !== "Canteen" && activeTab !== "Gym" && activeTab !== "Bubble" && (
-        <Card className="space-y-3">
-          <h2 className="text-base font-semibold">Admin Editor: {activeTab}</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm text-slate-700">
-              Title
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                value={form.title}
-                onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-              />
-            </label>
-            <label className="text-sm text-slate-700">
-              Group
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                value={form.group}
-                onChange={(event) => setForm((prev) => ({ ...prev, group: event.target.value }))}
-              />
-            </label>
-            <label className="text-sm text-slate-700">
-              Start
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                type="datetime-local"
-                value={form.start}
-                onChange={(event) => setForm((prev) => ({ ...prev, start: event.target.value }))}
-              />
-            </label>
-            <label className="text-sm text-slate-700">
-              End
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                type="datetime-local"
-                value={form.end}
-                onChange={(event) => setForm((prev) => ({ ...prev, end: event.target.value }))}
-              />
-            </label>
-          </div>
-          <label className="block text-sm text-slate-700">
-            Description
-            <textarea
-              className="mt-1 min-h-20 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              value={form.description}
-              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={saveEvent}>{editingEventId ? "Update" : "Create"}</Button>
-            {editingEventId && (
-              <Button variant="outline" onClick={resetForm}>
-                Cancel
-              </Button>
-            )}
-          </div>
-          {status && <p className="text-sm text-slate-600">{status}</p>}
-        </Card>
-      )}
 
       {activeTab === "Canteen" && (
         <Card className="space-y-4 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6">
@@ -798,36 +643,6 @@ export default function SchedulesPage() {
         </Card>
       )}
 
-      {activeTab !== "Canteen" && activeTab !== "Gym" && activeTab !== "Bubble" && <div className="space-y-3">
-        {filteredEvents.map((event) => (
-          <Card key={event.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold">{event.title}</h3>
-                <p className="text-sm text-slate-600">
-                  {formatEventTime(event.start)} - {formatEventTime(event.end)} | {event.group}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">{event.description}</p>
-              </div>
-              {isAdmin && (
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => startEdit(event)}>
-                    Edit
-                  </Button>
-                  <Button variant="outline" onClick={() => removeEvent(event.id)}>
-                    Delete
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Card>
-        ))}
-        {!filteredEvents.length && (
-          <Card>
-            <p className="text-sm text-slate-600">No schedule entries in {activeTab} yet.</p>
-          </Card>
-        )}
-      </div>}
     </section>
   );
 }

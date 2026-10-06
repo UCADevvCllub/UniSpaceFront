@@ -109,45 +109,6 @@ export async function getEvents(filters?: {
   return rawEvents.filter(hasValidTimeRange);
 }
 
-export function pickCurrentOrNextEvent(events: CampusEvent[], now = new Date()) {
-  const sorted = events
-    .slice()
-    .sort((a, b) => a.start.toMillis() - b.start.toMillis());
-
-  const current = sorted.find((event) => {
-    const start = event.start.toDate();
-    const end = event.end.toDate();
-    return start <= now && end >= now;
-  });
-
-  if (current) return current;
-
-  return sorted.find((event) => event.start.toDate() > now) ?? null;
-}
-
-export function findEmptyClassrooms(events: CampusEvent[], now = new Date()) {
-  const validEvents = events.filter(hasValidTimeRange);
-  const rooms = Array.from(
-    new Set(
-      validEvents
-        .filter((event) => event.type === "lesson")
-        .map((event) => event.location),
-    ),
-  );
-
-  return rooms.filter((room) => {
-    const roomEvents = validEvents.filter((event) => event.location === room);
-    return !roomEvents.some((event) => {
-      const start = event.start.toDate();
-      const end = event.end.toDate();
-      return start <= now && end >= now;
-    });
-  });
-}
-
-
-
-
 // fetching bubble-event data from the endpoint
 
 export async function fetchBubbleEvents() {
@@ -182,28 +143,6 @@ export const fetchCohorts = () =>
 export const fetchContacts = () =>
   djangoApi.get(`/api/contacts/`).then(res => res.data);
 
-export async function fetchEvents() {
-  const response = await djangoApi.get(`/api/class-events/`);
-  return response.data;
-}
-// CREATE
-export async function createClassEvent(data: any) {
-  const payload = {
-    subject_id: data.subjectId,
-    instructor_id: data.instructorId,
-    cohort_id: data.cohortId,
-    room_id: data.roomId,
-    event_data: {
-      day: data.day,
-      start_time: data.startTime,
-      end_time: data.endTime,
-      status: 'CLASS'
-    }
-  };
-  const response = await djangoApi.post(`/api/class-events/`, payload);
-  return response.data;
-}
-
 // ADD
 
 export async function updateClassEvent(id: string, data: any) {
@@ -237,14 +176,6 @@ export async function deleteClassEvent(id: string) {
   return response.data;
 }
 
-
-export const dayMap: Record<string, string> = {
-  'MON': 'MONDAY',
-  'TUE': 'TUESDAY',
-  'WED': 'WEDNESDAY',
-  'THU': 'THURSDAY',
-  'FRI': 'FRIDAY'
-};
 
 export async function createGymEventDjango(data: {
   gender: string;

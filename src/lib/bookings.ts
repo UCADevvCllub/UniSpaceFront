@@ -84,14 +84,3 @@ export async function updateBooking(eventId: string, input: BookingInput) {
     updatedAt: Timestamp.now(),
   });
 }
-
-export async function quickCreateBooking(userId: string, input: BookingInput) {
-  await addDoc(eventsCollection, {
-    ...input,
-    type: "booking",
-    start: Timestamp.fromDate(input.start),
-    end: Timestamp.fromDate(input.end),
-    createdBy: userId,
-    createdAt: Timestamp.now(),
-  });
-}

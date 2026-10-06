@@ -26,11 +26,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Read state from Redux store
   const user = useSelector((state: any) => state.auth.user);

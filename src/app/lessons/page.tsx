@@ -5,9 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fetchClassEvents, djangoApi } from "@/lib/events";
-import { mapDjangoToUi, formatEventTime, yearColumns } from "@/lib/utils";
-import { finalExamsSchedule } from "./final-exams-data";
-import { useEvents } from "@/hooks/use-events";
+import { mapDjangoToUi, yearColumns } from "@/lib/utils";
 
 import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +16,6 @@ import { useAuth } from "@/context/auth-context";
 import { reverseDayMap } from "@/lib/utils";
 import { toast, Toaster } from "sonner";
 import {
-  fetchEvents,
   fetchSubjects,
   fetchInstructors,
   fetchRooms,
@@ -146,7 +143,6 @@ export default function LessonsPage() {
         return COHORT_ORDER.indexOf(a.cohort_name) - COHORT_ORDER.indexOf(b.cohort_name);
       });
   }, [cohorts]);
-  const { data: events } = useQuery({ queryKey: ["events"], queryFn: fetchEvents });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
