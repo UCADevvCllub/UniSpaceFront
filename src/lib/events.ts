@@ -72,9 +72,13 @@ const eventsCollection = collection(db, "events");
 
 export const CANTEEN_SCHEDULE = {
   breakfastWeekday: "8:00 AM - 9:30 AM",
-  breakfastWeekend: "10:00 AM",
-  lunch: "12:00 PM - 2:00 PM",
+  breakfastWeekend: "8:00 AM - 10:00 AM",
+  morningBreak: "10:30 AM - 11:00 AM",
+  lunch: "11:30 AM - 2:00 PM",
+  lunchWeekend: "11:30 PM - 2:00 PM",
+  afternoonBreak: "3:15 PM - 4:00 PM",
   dinner: "6:00 PM - 8:00 PM",
+  dinnerWeekend: "6:00 PM - 8:00 PM",
 } as const;
 
 

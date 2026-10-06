@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -429,6 +429,21 @@ export default function LessonsPage() {
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
   const activeColumns = yearColumns(academicYearToId[activeGroup]);
 
+  const [isScrolledRight, setIsScrolledRight] = useState(false);
+
+  const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollLeft = e.currentTarget.scrollLeft;
+    if (scrollLeft > 15 && !isScrolledRight) {
+      setIsScrolledRight(true);
+    } else if (scrollLeft < 8 && isScrolledRight) {
+      setIsScrolledRight(false);
+    }
+  };
+
+  useEffect(() => {
+    setIsScrolledRight(false);
+  }, [activeGroup]);
+
 
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
     queryKey: ["django-class-events"],
@@ -486,14 +501,14 @@ export default function LessonsPage() {
         <h1 className="text-2xl font-bold">Lessons</h1>
 
         {/* --- NAVBAR --- */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {groups.map((group) => (
             <button
               key={group}
               onClick={() => setActiveGroup(group)}
               className={group === activeGroup
-                ? "rounded-full bg-primary px-4 py-2 text-sm font-medium text-white shadow-md"
-                : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"}
+                ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
+                : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
             >
               {group}
             </button>
@@ -501,9 +516,9 @@ export default function LessonsPage() {
           {isAdmin && (
             <Button
               onClick={handleAddClick}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm"
             >
-              <span className="text-lg">+</span> Add Lesson
+              <span className="text-base sm:text-lg">+</span> Add Lesson
             </Button>
           )}
         </div>
@@ -516,75 +531,110 @@ export default function LessonsPage() {
             full viewport width instead of being squeezed into that same narrow column. */}
         {academicYearToId[activeGroup] && (
           <div className="relative left-1/2 right-1/2 w-screen -mx-[50vw] px-4 sm:px-6 lg:px-10">
-          <Card className="p-6 border-slate-200 bg-slate-50/50">
-            <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
+            <Card className="p-6 border-slate-200 bg-slate-50/50">
+              <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
 
-            <div className="overflow-x-auto border border-slate-200 bg-white rounded-2xl shadow-sm">
-              <div style={{ minWidth: activeColumns.length === 3 ? 2100 : 1550 }}>
-                {/* Header Days */}
-                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-50/80">
-                  <div className="p-2 sm:p-4 border-r border-slate-200 font-bold text-slate-400 text-[9px] sm:text-[10px] flex items-center justify-center sticky left-0 z-20 bg-slate-50">TIME</div>
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
-                    <div key={day} className="p-1.5 sm:p-3 border-r border-slate-200 text-center last:border-r-0">
-                      <div className="font-bold text-slate-700 text-[10px] sm:text-sm">
-                        <span className="sm:hidden">{day.slice(0, 3)}</span>
-                        <span className="hidden sm:inline">{day}</span>
-                      </div>
-                      <div
-                        className="grid text-[7px] sm:text-[9px] font-bold text-slate-400 mt-0.5 sm:mt-1"
-                        style={{ gridTemplateColumns: `repeat(${activeColumns.length}, minmax(0, 1fr))` }}
-                      >
-                        {activeColumns.map((col) => <div key={col.cohort}>{col.label}</div>)}
-                      </div>
+              <div
+                className="overflow-x-auto overflow-y-hidden border border-slate-200 bg-white rounded-2xl shadow-sm"
+                onScroll={handleTableScroll}
+              >
+                <div style={{ minWidth: activeColumns.length === 3 ? 1695 : 1252 }}>
+                  {/* Header Days */}
+                  <div
+                    className={`grid ${
+                      isScrolledRight
+                        ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
+                        : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
+                    } border-b border-slate-200 bg-slate-50/80 transition-[grid-template-columns] duration-200`}
+                  >
+                    <div
+                      className={`border-r border-slate-200 font-bold text-slate-400 flex items-center justify-center sticky left-0 z-20 bg-slate-50 transition-all duration-200 ${
+                        isScrolledRight ? "text-[6.5px] px-[1px] py-1" : "text-[7.5px] sm:text-[8px] p-1 sm:p-2.5"
+                      }`}
+                    >
+                      TIME
                     </div>
-                  ))}
-                </div>
-
-                {/* Grid Body */}
-                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] relative h-[945px] bg-white">
-                  {/* Time Axis */}
-                  <div className="border-r border-slate-200 bg-slate-50/30 sticky left-0 z-20">
-                    {Array.from({ length: 14 }).map((_, i) => (
-                      <div key={i} className="absolute w-full text-[11px] text-slate-400 font-bold pr-3 text-right" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%`, transform: 'translateY(-50%)' }}>
-                        {String(8 + i).padStart(2, '0')}:00
+                    {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map(day => (
+                      <div key={day} className="p-1 sm:p-2 border-r border-slate-200 text-center last:border-r-0">
+                        <div className="font-bold text-slate-700 text-[8px] sm:text-[11px]">
+                          <span className="sm:hidden">{day.slice(0, 3)}</span>
+                          <span className="hidden sm:inline">{day}</span>
+                        </div>
+                        <div
+                          className="grid text-[5.5px] sm:text-[7.5px] font-bold text-slate-400 mt-0.5"
+                          style={{ gridTemplateColumns: `repeat(${activeColumns.length}, minmax(0, 1fr))` }}
+                        >
+                          {activeColumns.map((col) => <div key={col.cohort}>{col.label}</div>)}
+                        </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Day Columns */}
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
-                    <div
-                      key={day}
-                      data-day={day}
-                      className={`border-r border-slate-200 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
-                      onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
-                    >
-                      {/* Hour Lines */}
+                  {/* Grid Body */}
+                  <div
+                    className={`grid ${
+                      isScrolledRight
+                        ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
+                        : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
+                    } relative h-[763px] bg-white transition-[grid-template-columns] duration-200`}
+                  >
+                    {/* Time Axis */}
+                    <div className="border-r border-slate-200 bg-slate-50 sticky left-0 z-20 transition-all duration-200 shadow-[1px_0_3px_rgba(0,0,0,0.04)]">
                       {Array.from({ length: 14 }).map((_, i) => (
-                        <div key={i} className="absolute w-full border-t border-slate-200" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
-                      ))}
-
-                      {/* Lessons */}
-                      {filteredSchedule.filter(l => l.day === day).map(lesson => (
-                        <LessonCard
-                          key={lesson.id}
-                          lesson={lesson}
-                          isAdmin={isAdmin}
-                          onEdit={handleEditClick}
-                          onDelete={handleDelete}
-                          onMove={applyLessonMove}
-                          onResize={applyLessonResize}
-                        />
+                        <div
+                          key={i}
+                          className={`absolute w-full text-[9px] text-slate-400 font-bold ${
+                            isScrolledRight ? "pr-[3px]" : "pr-2"
+                          } text-right transition-all duration-200`}
+                          style={{
+                            top: `${(i * 60 / CALENDAR_DURATION) * 100}%`,
+                            transform:
+                              i === 0
+                                ? "translateY(2px)"
+                                : i === 13
+                                ? "translateY(calc(-100% - 2px))"
+                                : "translateY(-50%)",
+                          }}
+                        >
+                          {String(8 + i).padStart(2, '0')}:00
+                        </div>
                       ))}
                     </div>
-                  ))}
+
+                    {/* Day Columns */}
+                    {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"].map((day) => (
+                      <div
+                        key={day}
+                        data-day={day}
+                        className={`border-r border-slate-200 relative last:border-r-0 ${isAdmin ? "cursor-pointer" : ""}`}
+                        onClick={isAdmin ? (e) => handleSlotClick(day, e) : undefined}
+                      >
+                        {/* Hour Lines */}
+                        {Array.from({ length: 14 }).map((_, i) => (
+                          <div key={i} className="absolute w-full border-t border-slate-200" style={{ top: `${(i * 60 / CALENDAR_DURATION) * 100}%` }} />
+                        ))}
+
+                        {/* Lessons */}
+                        {filteredSchedule.filter(l => l.day === day).map(lesson => (
+                          <LessonCard
+                            key={lesson.id}
+                            lesson={lesson}
+                            isAdmin={isAdmin}
+                            onEdit={handleEditClick}
+                            onDelete={handleDelete}
+                            onMove={applyLessonMove}
+                            onResize={applyLessonResize}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            {filteredSchedule.length === 0 && !isDjangoLoading && (
-              <p className="text-center text-slate-500 mt-4">No classes found in Django for this year.</p>
-            )}
-          </Card>
+              {filteredSchedule.length === 0 && !isDjangoLoading && (
+                <p className="text-center text-slate-500 mt-4">No classes found in Django for this year.</p>
+              )}
+            </Card>
           </div>
         )}
       </section>
@@ -876,9 +926,9 @@ function LessonCard({
         });
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute p-1 sm:p-2 rounded border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${isShared
-          ? "bg-purple-50 border-purple-200 border-l-purple-500 text-purple-700"
-          : "bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700"
+      className={`absolute p-1 sm:p-1.5 rounded border-l-[3px] sm:border-l-4 shadow-sm z-10 group hover:z-[15] active:z-30 ${isShared
+        ? "bg-purple-50 border-purple-200 border-l-purple-500 text-purple-700"
+        : "bg-indigo-50 border-indigo-200 border-l-indigo-500 text-indigo-700"
         } ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       {isAdmin && (["start", "end"] as const).map((edge) => {
@@ -929,22 +979,22 @@ function LessonCard({
             }}
             className={`absolute inset-x-0 ${edge === "start" ? "top-0 -translate-y-1/2" : "bottom-0 translate-y-1/2"} h-2 flex items-center justify-center cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity`}
           >
-            <div className="h-0.5 w-6 rounded-full bg-indigo-500" />
+            <div className="h-0.5 w-5 rounded-full bg-indigo-500" />
           </motion.div>
         );
       })}
-      <div className="flex items-baseline gap-1 text-[10px] font-bold">
+      <div className="flex items-baseline gap-1 text-[9px] font-bold leading-tight">
         <span className="min-w-0 truncate">{lesson.title}</span>
         {lesson.isCombined && (
           <span className="shrink-0 font-semibold opacity-70">({lesson.cohortLabel})</span>
         )}
       </div>
       {lesson.otherYears?.length > 0 && (
-        <div className="text-[7px] sm:text-[9px] font-semibold truncate">Shared with: {lesson.otherYears.join(", ")}</div>
+        <div className="text-[8px] font-semibold truncate leading-tight">Shared with: {lesson.otherYears.join(", ")}</div>
       )}
-      <div className="text-[7px] sm:text-[9px] font-medium">{effectiveStart}-{effectiveEnd}</div>
-      <div className="text-[7px] sm:text-[9px] font-medium truncate">{lesson.instructor}</div>
-      <div className={`text-[7px] sm:text-[9px] font-bold mt-0.5 sm:mt-1 uppercase ${isShared ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
+      <div className="text-[8px] font-medium leading-tight">{effectiveStart}-{effectiveEnd}</div>
+      <div className="text-[8px] font-medium truncate leading-tight">{lesson.instructor}</div>
+      <div className={`text-[8px] font-bold mt-0.5 uppercase leading-tight ${isShared ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
 
       {isAdmin && (
         <button
@@ -954,8 +1004,8 @@ function LessonCard({
           }}
           className="p-1 text-indigo-400 hover:text-indigo-600 bg-white/50 rounded shadow-sm"
         >
-          <Pencil size={10} className="sm:hidden" />
-          <Pencil size={12} className="hidden sm:block" />
+          <Pencil size={9} className="sm:hidden" />
+          <Pencil size={11} className="hidden sm:block" />
         </button>
       )}
       {isAdmin && (
@@ -966,8 +1016,8 @@ function LessonCard({
           }}
           className="absolute top-1 right-1 p-1 text-indigo-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <Trash2 size={11} className="sm:hidden" />
-          <Trash2 size={14} className="hidden sm:block" />
+          <Trash2 size={10} className="sm:hidden" />
+          <Trash2 size={12} className="hidden sm:block" />
         </button>
       )}
     </motion.div>
