@@ -150,10 +150,9 @@ export const fetchContacts = () =>
 // ADD
 
 export async function updateClassEvent(id: string, data: any) {
-  const payload = {
+  const payload: any = {
     subject_id: parseInt(data.subject_id),
     instructor_id: parseInt(data.instructor_id),
-    cohort_id: parseInt(data.cohort_id),
     room_id: parseInt(data.room_id),
     event_data: {
       day: data.day,
@@ -162,6 +161,12 @@ export async function updateClassEvent(id: string, data: any) {
       status: "CLASS"
     }
   };
+
+  if (data.cohort_ids && Array.isArray(data.cohort_ids) && data.cohort_ids.length > 0) {
+    payload.cohort_ids = data.cohort_ids.map((c: any) => parseInt(c));
+  } else if (data.cohort_id) {
+    payload.cohort_id = parseInt(data.cohort_id);
+  }
 
   return djangoApi.patch(`/api/class-events/${id}/`, payload);
 }

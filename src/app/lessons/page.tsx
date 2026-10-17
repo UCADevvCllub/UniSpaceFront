@@ -4,23 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { fetchClassEvents, djangoApi } from "@/lib/events";
-import { mapDjangoToUi, yearColumns } from "@/lib/utils";
+import { fetchClassEvents, djangoApi, deleteClassEvent, updateClassEvent, fetchSubjects, fetchInstructors, fetchRooms, fetchCohorts } from "@/lib/events";
+import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, FreshmanSubTab, reverseDayMap } from "@/lib/utils";
 
 import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { deleteClassEvent } from "@/lib/events";
-import { updateClassEvent } from "@/lib/events";
 import { Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-import { reverseDayMap } from "@/lib/utils";
 import { toast, Toaster } from "sonner";
-import {
-  fetchSubjects,
-  fetchInstructors,
-  fetchRooms,
-  fetchCohorts
-} from "@/lib/events";
+
 // --- CONSTANTS ---
 // bib bo
 
@@ -113,9 +105,9 @@ const yearIdToLabel: Record<number, GroupLabel> = {
   4: "Senior"
 };
 
-const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CM"];
+const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CS_DIRECT", "POST_PREP", "CM"];
 
-// "CS" or "CM" — the major a cohort belongs to (CS_A / CS_B are both CS)
+// "CS" or "CM" — the major a cohort belongs to (CS_A / CS_B / CS_DIRECT / POST_PREP are all CS)
 const majorOf = (cohortName: string) => (cohortName.startsWith("CM") ? "CM" : "CS");
 
 // The first message in a DRF 400 body, so the toast says what actually clashed
@@ -168,14 +160,12 @@ export default function LessonsPage() {
   const [formData, setFormData] = useState({
     subject_id: "",
     instructor_id: "",
-    cohort_id: "",
+    cohort_ids: [] as string[],
     room_id: "",
     day: "MON",
     start_time: "09:00",
-    end_time: "10:30"
+    end_time: "10:30",
   });
-
-
 
   const [status, setStatus] = useState("");
   const { isAdmin } = useAuth();
@@ -185,11 +175,11 @@ export default function LessonsPage() {
   const [extraYearIds, setExtraYearIds] = useState<number[]>([]);
   // When editing: the cohort picker value the form opened with, and the class's cohort ids
   // per year — so years/cohorts the admin didn't touch are saved exactly as they were.
-  const [editOriginal, setEditOriginal] = useState<{ cohortValue: string; byYear: Record<number, string[]> } | null>(null);
+  const [editOriginal, setEditOriginal] = useState<{ byYear: Record<number, string[]> } | null>(null);
 
-  // Cohort ids of one major in one year, e.g. Freshman CS -> [CS_A, CS_B], Senior CS -> [CS]
+  // Cohort ids of one major in one year, e.g. Freshman CS -> [CS_A, CS_B, CS_DIRECT, POST_PREP]
   const majorCohortIds = (yearId: number, major: string) => {
-    const names = yearColumns(yearId).map((col) => col.cohort).filter((name) => majorOf(name) === major);
+    const names = allYearCohorts(yearId).map((col) => col.cohort).filter((name) => majorOf(name) === major);
     return sortedCohorts
       .filter((c: any) => c.study_year_id === yearId && names.includes(c.cohort_name))
       .map((c: any) => String(c.id));
@@ -198,18 +188,8 @@ export default function LessonsPage() {
   // Every cohort the class is for: the cohort(s) picked for the year being viewed, plus the
   // same major(s) in each ticked extra year.
   const buildCohortIds = (): string[] => {
-    const activeYearId = academicYearToId[activeGroup];
-    let current: string[];
-    if (editOriginal && formData.cohort_id === editOriginal.cohortValue) {
-      current = editOriginal.byYear[activeYearId] ?? [];
-    } else if (formData.cohort_id === "BOTH") {
-      current = [...majorCohortIds(activeYearId, "CS"), ...majorCohortIds(activeYearId, "CM")];
-    } else if (formData.cohort_id === "BOTH_AB") {
-      current = majorCohortIds(activeYearId, "CS");
-    } else {
-      current = formData.cohort_id ? [String(formData.cohort_id)] : [];
-    }
-    if (current.length === 0) throw new Error("Select a cohort first.");
+    const current = formData.cohort_ids;
+    if (!current || current.length === 0) throw new Error("Select at least one cohort.");
 
     const majors = new Set(
       current.map((id) => majorOf(cohorts?.find((c: any) => String(c.id) === id)?.cohort_name ?? "")),
@@ -230,25 +210,21 @@ export default function LessonsPage() {
     return Array.from(new Set(ids));
   };
 
-
   const handleEditClick = (lesson: any) => {
     if (!isAdmin) return;
-    // The cohort picker shows this year's part of the class: one cohort, or a "Both" option.
     const yearPart: string[] = lesson.yearCohortIds ?? [String(lesson.cohortId)];
-    const yearNames = yearPart.map((id) => cohorts?.find((c: any) => String(c.id) === id)?.cohort_name ?? "");
-    const cohortValue = yearPart.length === 1 ? yearPart[0] : yearNames.some((n) => n.startsWith("CM")) ? "BOTH" : "BOTH_AB";
 
     setFormData({
-      subject_id: lesson.subjectId,
-      instructor_id: lesson.instructorId,
-      cohort_id: cohortValue,
-      room_id: lesson.roomId,
+      subject_id: String(lesson.subjectId),
+      instructor_id: String(lesson.instructorId),
+      cohort_ids: yearPart,
+      room_id: String(lesson.roomId),
       day: reverseDayMap[lesson.day] || "MON",
       start_time: lesson.startTime,
       end_time: lesson.endTime
     });
     setEditingId(lesson.id);
-    setEditOriginal({ cohortValue, byYear: lesson.groupByYear ?? { [lesson.yearId]: yearPart } });
+    setEditOriginal({ byYear: lesson.groupByYear ?? { [lesson.yearId]: yearPart } });
     setExtraYearIds(Object.keys(lesson.groupByYear ?? {}).map(Number).filter((y) => y !== lesson.yearId));
     setIsModalOpen(true);
   };
@@ -256,9 +232,19 @@ export default function LessonsPage() {
   // Function to open modal for ADDING
   const handleAddClick = () => {
     if (!isAdmin) return;
+    const targetYearId = academicYearToId[activeGroup];
+    const defaultCohort = sortedCohorts.find(
+      (c: any) => c.study_year_id === targetYearId && c.cohort_name === activeColumns[0]?.cohort,
+    ) || sortedCohorts.find((c: any) => c.study_year_id === targetYearId);
+
     setFormData({
-      subject_id: "", instructor_id: "", cohort_id: "", room_id: "",
-      day: "MON", start_time: "09:00", end_time: "10:30"
+      subject_id: "",
+      instructor_id: "",
+      cohort_ids: defaultCohort ? [String(defaultCohort.id)] : [],
+      room_id: "",
+      day: "MON",
+      start_time: "09:00",
+      end_time: "10:30"
     });
     setEditingId(null);
     setEditOriginal(null);
@@ -276,17 +262,19 @@ export default function LessonsPage() {
     const startTime = minutesToTimeStr(CALENDAR_START + minutesFromStart);
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
-    // Which sub-column was clicked (CS A / CS B / CM on Freshman, CS / CM otherwise) decides the cohort.
     const studyYearId = academicYearToId[activeGroup];
-    const columns = yearColumns(studyYearId);
+    const columns = yearColumns(studyYearId, activeGroup === "Freshman" ? freshmanSubTab : undefined);
     const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
+    const targetCohortName = columns[columnIndex]?.cohort;
     const cohort = sortedCohorts.find(
-      (c: any) => c.study_year_id === studyYearId && c.cohort_name === columns[columnIndex].cohort,
+      (c: any) => c.study_year_id === studyYearId && c.cohort_name === targetCohortName,
     );
 
     setFormData({
-      subject_id: "", instructor_id: "", room_id: "",
-      cohort_id: cohort ? String(cohort.id) : "",
+      subject_id: "",
+      instructor_id: "",
+      room_id: "",
+      cohort_ids: cohort ? [String(cohort.id)] : [],
       day: reverseDayMap[dayFull] || "MON",
       start_time: startTime,
       end_time: endTime,
@@ -297,9 +285,6 @@ export default function LessonsPage() {
     setIsModalOpen(true);
   };
 
-  // Shared save path for both moving and resizing a lesson. onRejected fires only if the
-  // backend rejects it (e.g. a conflict), so the card can snap back — on success it just
-  // stays put, no revert needed.
   const patchLesson = (
     lesson: any,
     patch: { day: string; start_time: string; end_time: string },
@@ -312,7 +297,7 @@ export default function LessonsPage() {
         data: {
           subject_id: lesson.subjectId,
           instructor_id: lesson.instructorId,
-          cohort_id: lesson.cohortId,
+          cohort_ids: lesson.yearCohortIds ?? [String(lesson.cohortId)],
           room_id: lesson.roomId,
           ...patch,
         },
@@ -427,7 +412,8 @@ export default function LessonsPage() {
   };
 
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
-  const activeColumns = yearColumns(academicYearToId[activeGroup]);
+  const [freshmanSubTab, setFreshmanSubTab] = useState<FreshmanSubTab>("main");
+  const activeColumns = yearColumns(academicYearToId[activeGroup], activeGroup === "Freshman" ? freshmanSubTab : undefined);
 
   const [isScrolledRight, setIsScrolledRight] = useState(false);
 
@@ -442,7 +428,7 @@ export default function LessonsPage() {
 
   useEffect(() => {
     setIsScrolledRight(false);
-  }, [activeGroup]);
+  }, [activeGroup, freshmanSubTab]);
 
 
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
@@ -461,37 +447,111 @@ export default function LessonsPage() {
       if (l.shareGroup) groups.set(l.shareGroup, [...(groups.get(l.shareGroup) ?? []), l]);
     }
 
-    // One card per class in this year: the rows of a shared class that sit in this year are
-    // merged into one entry spanning just the columns they cover (e.g. CS A + CS B), and the
-    // card knows which other years the class is shared with.
     const merged: any[] = [];
     const seenGroups = new Set<string>();
+
     for (const lesson of allLessons.filter((l) => l.yearId === targetId)) {
       const members = lesson.shareGroup ? groups.get(lesson.shareGroup)! : [lesson];
       if (lesson.shareGroup) {
         if (seenGroups.has(lesson.shareGroup)) continue;
         seenGroups.add(lesson.shareGroup);
       }
-      const here = members.filter((m) => m.yearId === targetId).sort((a, b) => a.columnIndex - b.columnIndex);
+      const here = members.filter((m) => m.yearId === targetId);
+
       const groupByYear: Record<number, string[]> = {};
       for (const m of members) (groupByYear[m.yearId] ??= []).push(String(m.cohortId));
       const otherYears = Object.keys(groupByYear).map(Number).filter((y) => y !== targetId)
         .sort((a, b) => a - b).map((y) => yearIdToLabel[y]).filter(Boolean);
-      const columns = here.map((m) => m.columnIndex);
-      const combinedColumnStart = Math.min(...columns);
-      merged.push({
-        ...lesson,
-        isCombined: here.length > 1,
-        combinedColumnStart,
-        combinedColumnSpan: Math.max(...columns) - combinedColumnStart + 1,
-        cohortLabel: here.map((m) => m.cohortName.replace("_", " ")).join(" + "),
-        yearCohortIds: here.map((m) => String(m.cohortId)),
-        groupByYear,
-        otherYears,
-      });
+
+      if (activeGroup === "Freshman") {
+        const hereCohorts = here.map((m) => m.cohortName);
+        const isSharedFreshman = here.length > 1;
+
+        if (freshmanSubTab === "main") {
+          // On "Main", show if it includes CM, or if it's a shared/combined freshman class
+          const isCm = hereCohorts.includes("CM");
+          if (!isCm && !isSharedFreshman) continue;
+
+          merged.push({
+            ...lesson,
+            columnIndex: 0,
+            columnCount: 1,
+            isCombined: isSharedFreshman,
+            combinedColumnStart: 0,
+            combinedColumnSpan: 1,
+            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+            yearCohortIds: here.map((m) => String(m.cohortId)),
+            groupByYear,
+            otherYears,
+          });
+        } else if (freshmanSubTab === "cs_ab") {
+          const cols = ["CS_A", "CS_B"];
+          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
+          if (matchingMembers.length === 0) continue;
+
+          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
+          const colStart = Math.min(...colIndices);
+          const colSpan = Math.max(...colIndices) - colStart + 1;
+
+          merged.push({
+            ...lesson,
+            columnIndex: colStart,
+            columnCount: 2,
+            isCombined: matchingMembers.length > 1 || here.length > 1,
+            combinedColumnStart: colStart,
+            combinedColumnSpan: colSpan,
+            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+            yearCohortIds: here.map((m) => String(m.cohortId)),
+            groupByYear,
+            otherYears,
+          });
+        } else if (freshmanSubTab === "cs_direct_prep") {
+          const cols = ["CS_DIRECT", "POST_PREP"];
+          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
+          if (matchingMembers.length === 0) continue;
+
+          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
+          const colStart = Math.min(...colIndices);
+          const colSpan = Math.max(...colIndices) - colStart + 1;
+
+          merged.push({
+            ...lesson,
+            columnIndex: colStart,
+            columnCount: 2,
+            isCombined: matchingMembers.length > 1 || here.length > 1,
+            combinedColumnStart: colStart,
+            combinedColumnSpan: colSpan,
+            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+            yearCohortIds: here.map((m) => String(m.cohortId)),
+            groupByYear,
+            otherYears,
+          });
+        }
+      } else {
+        const cols = ["CS", "CM"];
+        const colIndices = here.map((m) => {
+          const idx = cols.indexOf(m.cohortName);
+          return idx >= 0 ? idx : m.cohortName.startsWith("CM") ? 1 : 0;
+        });
+        const colStart = Math.min(...colIndices);
+        const colSpan = Math.max(...colIndices) - colStart + 1;
+
+        merged.push({
+          ...lesson,
+          columnIndex: colStart,
+          columnCount: 2,
+          isCombined: here.length > 1,
+          combinedColumnStart: colStart,
+          combinedColumnSpan: colSpan,
+          cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+          yearCohortIds: here.map((m) => String(m.cohortId)),
+          groupByYear,
+          otherYears,
+        });
+      }
     }
     return merged;
-  }, [allLessons, activeGroup]);
+  }, [allLessons, activeGroup, freshmanSubTab]);
 
 
 
@@ -501,18 +561,20 @@ export default function LessonsPage() {
         <h1 className="text-2xl font-bold">Lessons</h1>
 
         {/* --- NAVBAR --- */}
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          {groups.map((group) => (
-            <button
-              key={group}
-              onClick={() => setActiveGroup(group)}
-              className={group === activeGroup
-                ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
-                : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
-            >
-              {group}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {groups.map((group) => (
+              <button
+                key={group}
+                onClick={() => setActiveGroup(group)}
+                className={group === activeGroup
+                  ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
+                  : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
+              >
+                {group}
+              </button>
+            ))}
+          </div>
           {isAdmin && (
             <Button
               onClick={handleAddClick}
@@ -523,7 +585,42 @@ export default function LessonsPage() {
           )}
         </div>
 
-
+        {/* --- FRESHMAN SUB-CATEGORIES --- */}
+        {activeGroup === "Freshman" && (
+          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Tracks:</span>
+            <button
+              onClick={() => setFreshmanSubTab("main")}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                freshmanSubTab === "main"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Main
+            </button>
+            <button
+              onClick={() => setFreshmanSubTab("cs_ab")}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                freshmanSubTab === "cs_ab"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              CS A & CS B
+            </button>
+            <button
+              onClick={() => setFreshmanSubTab("cs_direct_prep")}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                freshmanSubTab === "cs_direct_prep"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              CS Direct & Post Prep
+            </button>
+          </div>
+        )}
 
         {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) ---
             Full-bleed: breaks out of the page's max-w-4xl column (which keeps the title/tabs
@@ -532,13 +629,15 @@ export default function LessonsPage() {
         {academicYearToId[activeGroup] && (
           <div className="relative left-1/2 right-1/2 w-screen -mx-[50vw] px-4 sm:px-6 lg:px-10">
             <Card className="p-6 border-slate-200 bg-slate-50/50">
-              <h2 className="text-xl font-bold mb-4">{activeGroup} Schedule</h2>
+              <h2 className="text-xl font-bold mb-4">
+                {activeGroup} Schedule {activeGroup === "Freshman" ? (freshmanSubTab === "main" ? "— Main" : freshmanSubTab === "cs_ab" ? "— CS A & CS B" : "— CS Direct & Post Prep") : ""}
+              </h2>
 
               <div
                 className="overflow-x-auto overflow-y-hidden border border-slate-200 bg-white rounded-2xl shadow-sm"
                 onScroll={handleTableScroll}
               >
-                <div style={{ minWidth: activeColumns.length === 3 ? 1695 : 1252 }}>
+                <div style={{ minWidth: activeColumns.length === 3 ? 1695 : activeColumns.length === 1 ? 900 : 1252 }}>
                   {/* Header Days */}
                   <div
                     className={`grid ${
@@ -732,33 +831,110 @@ export default function LessonsPage() {
                   </div>
                 </div>
 
-                {/* Cohort */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Cohort</label>
-                  <select
-                    className="w-full border border-slate-200 p-2 rounded-lg bg-slate-50"
-                    value={formData.cohort_id}
-                    onChange={(e) => setFormData({ ...formData, cohort_id: e.target.value })}
-                  >
-                    <option value="">Select Cohort</option>
-                    <option value="BOTH">Both CS and CM</option>
-                    {activeColumns.length === 3 && (
-                      <option value="BOTH_AB">Both CS A and CS B</option>
+                {/* Cohort Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-500 uppercase">
+                      Cohorts ({activeGroup})
+                    </label>
+                    {/* Quick selection pills for Freshman */}
+                    {activeGroup === "Freshman" && (
+                      <div className="flex gap-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === 1 && ["CS_A", "CS_B"].includes(c.cohort_name))
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        >
+                          CS A & B
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === 1 && ["CS_DIRECT", "POST_PREP"].includes(c.cohort_name))
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        >
+                          Direct & Prep
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === 1)
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        >
+                          All
+                        </button>
+                      </div>
                     )}
+                    {activeGroup !== "Freshman" && (
+                      <div className="flex gap-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetYearId = academicYearToId[activeGroup];
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === targetYearId)
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        >
+                          Both CS & CM
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cohort Checkboxes */}
+                  <div className="flex flex-wrap gap-2 p-2.5 rounded-lg border border-slate-200 bg-slate-50">
                     {(() => {
-                      const selectedCohort = cohorts?.find((c: any) => String(c.id) === String(formData.cohort_id));
-                      const targetYearId = selectedCohort ? selectedCohort.study_year_id : academicYearToId[activeGroup];
-                      const allowed = yearColumns(targetYearId).map((col) => col.cohort);
-                      // Also keep the lesson's current cohort (e.g. an older plain CS one) so editing shows it.
-                      return sortedCohorts
-                        .filter((c: any) => c.study_year_id === targetYearId && (allowed.includes(c.cohort_name) || c.id === selectedCohort?.id))
-                        .map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.cohort_name}
-                          </option>
-                        ));
+                      const targetYearId = academicYearToId[activeGroup];
+                      const allowedCohorts = allYearCohorts(targetYearId).map((c) => c.cohort);
+                      const available = sortedCohorts.filter(
+                        (c: any) => c.study_year_id === targetYearId && allowedCohorts.includes(c.cohort_name)
+                      );
+
+                      return available.map((c: any) => {
+                        const isChecked = formData.cohort_ids.includes(String(c.id));
+                        return (
+                          <label
+                            key={c.id}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${
+                              isChecked
+                                ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
+                                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const idStr = String(c.id);
+                                const newIds = e.target.checked
+                                  ? [...formData.cohort_ids, idStr]
+                                  : formData.cohort_ids.filter((id) => id !== idStr);
+                                setFormData({ ...formData, cohort_ids: newIds });
+                              }}
+                            />
+                            {formatCohortName(c.cohort_name)}
+                          </label>
+                        );
+                      });
                     })()}
-                  </select>
+                  </div>
                 </div>
 
                 {/* Other study years taking the same class (same major) */}
