@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Coffee, Sun, Moon, Clock } from "lucide-react";
+import { Coffee, Sun, Moon, Clock, BookOpen, Users } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,9 @@ import {
   patchBubbleEventDjango,
   deleteBubbleEventDjango,
   CANTEEN_SCHEDULE,
+  LIBRARY_SCHEDULE,
 } from "@/lib/events";
+import { section } from "framer-motion/client";
 
 export type GymSlot = {
   time: string;
@@ -29,7 +31,7 @@ export type GymSlot = {
   sun: string;
 };
 
-const scheduleTabs = ["Canteen", "Gym", "Bubble"] as const;
+const scheduleTabs = ["Canteen", "Library", "Gym", "Bubble"] as const;
 type ScheduleTab = (typeof scheduleTabs)[number];
 
 const gymDayKeyMap: Record<string, keyof Omit<GymSlot, "time">> = {
@@ -545,6 +547,98 @@ export default function SchedulesPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === "Library" && (
+        <Card className="space-y-6 border-slate-300 bg-gradient-to-br from-white to-slate-50 p-4 sm:p-6">
+          <h2 className="text-xl font-bold text-slate-900">Library Schedule</h2>
+
+          {/* Weekday Schedule */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Weekday</h3>
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-[2fr_1fr]">
+              {LIBRARY_SCHEDULE.weekday.map((slot, idx) => (
+                <div
+                  key={idx}
+                  className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:block ${slot.type === "staff"
+                    ? "border-emerald-100 bg-gradient-to-br from-emerald-50 to-emerald-100/50"
+                    : "border-violet-100 bg-gradient-to-br from-violet-50 to-violet-100/50"
+                    }`}
+                >
+                  <div className="flex items-center gap-3 md:mb-3 md:gap-2">
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full text-white shadow-inner shrink-0 ${slot.type === "staff" ? "bg-emerald-500" : "bg-violet-500"
+                        }`}
+                    >
+                      {slot.type === "staff" ? (
+                        <BookOpen className="h-5 w-5" />
+                      ) : (
+                        <Users className="h-5 w-5" />
+                      )}
+                    </div>
+                    <h3
+                      className={`text-base sm:text-lg font-bold ${slot.type === "staff" ? "text-emerald-950" : "text-violet-950"
+                        }`}
+                    >
+                      {slot.label}
+                    </h3>
+                  </div>
+                  <div className="space-y-1">
+                    <p
+                      className={`text-sm sm:text-base font-semibold whitespace-nowrap ${slot.type === "staff" ? "text-emerald-900" : "text-violet-900"
+                        }`}
+                    >
+                      {slot.start} - {slot.end}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Weekend Schedule */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Weekend</h3>
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-[1.7fr_2.3fr]">
+              {LIBRARY_SCHEDULE.weekend.map((slot, idx) => (
+                <div
+                  key={idx}
+                  className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:shadow-md flex items-center justify-between md:block ${slot.type === "closed"
+                    ? "border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200/50"
+                    : "border-violet-100 bg-gradient-to-br from-violet-50 to-violet-100/50"
+                    }`}
+                >
+                  <div className="flex items-center gap-3 md:mb-3 md:gap-2">
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full text-white shadow-inner shrink-0 ${slot.type === "closed" ? "bg-slate-400" : "bg-violet-500"
+                        }`}
+                    >
+                      {slot.type === "closed" ? (
+                        <Clock className="h-5 w-5" />
+                      ) : (
+                        <Users className="h-5 w-5" />
+                      )}
+                    </div>
+                    <h3
+                      className={`text-base sm:text-lg font-bold ${slot.type === "closed" ? "text-slate-700" : "text-violet-950"
+                        }`}
+                    >
+                      {slot.label}
+                    </h3>
+                  </div>
+                  <div className="space-y-1">
+                    <p
+                      className={`text-sm sm:text-base font-semibold whitespace-nowrap ${slot.type === "closed" ? "text-slate-600" : "text-violet-900"
+                        }`}
+                    >
+                      {slot.start} - {slot.end}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </Card>

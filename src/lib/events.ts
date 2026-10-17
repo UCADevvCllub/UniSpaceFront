@@ -81,6 +81,17 @@ export const CANTEEN_SCHEDULE = {
   dinnerWeekend: "6:00 PM - 8:00 PM",
 } as const;
 
+export const LIBRARY_SCHEDULE = {
+  weekday: [
+    { start: "9:00", end: "19:00", label: "Library Staff", type: "staff" as const },
+    { start: "19:00", end: "22:00", label: "Library Assistants", type: "assistants" as const },
+  ],
+  weekend: [
+    { start: "9:00", end: "15:00", label: "Closed", type: "closed" as const },
+    { start: "15:00", end: "22:00", label: "Library Assistants", type: "assistants" as const },
+  ],
+} as const;
+
 
 function hasValidTimestamp(value: unknown): value is { toDate: () => Date; toMillis: () => number } {
   return (
