@@ -33,6 +33,7 @@ export function yearColumns(yearId: number, subTab: FreshmanSubTab = "main"): { 
       ];
     }
     return [
+      { label: "CS", cohort: "CS" },
       { label: "CM", cohort: "CM" },
     ];
   }

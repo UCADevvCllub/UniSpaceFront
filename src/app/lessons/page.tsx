@@ -233,14 +233,21 @@ export default function LessonsPage() {
   const handleAddClick = () => {
     if (!isAdmin) return;
     const targetYearId = academicYearToId[activeGroup];
-    const defaultCohort = sortedCohorts.find(
-      (c: any) => c.study_year_id === targetYearId && c.cohort_name === activeColumns[0]?.cohort,
-    ) || sortedCohorts.find((c: any) => c.study_year_id === targetYearId);
+    let defaultIds: string[] = [];
+    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
+      const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
+      if (cmCohort) defaultIds = [String(cmCohort.id)];
+    } else {
+      const defaultCohort = sortedCohorts.find(
+        (c: any) => c.study_year_id === targetYearId && c.cohort_name === activeColumns[0]?.cohort,
+      ) || sortedCohorts.find((c: any) => c.study_year_id === targetYearId);
+      if (defaultCohort) defaultIds = [String(defaultCohort.id)];
+    }
 
     setFormData({
       subject_id: "",
       instructor_id: "",
-      cohort_ids: defaultCohort ? [String(defaultCohort.id)] : [],
+      cohort_ids: defaultIds,
       room_id: "",
       day: "MON",
       start_time: "09:00",
@@ -265,16 +272,32 @@ export default function LessonsPage() {
     const studyYearId = academicYearToId[activeGroup];
     const columns = yearColumns(studyYearId, activeGroup === "Freshman" ? freshmanSubTab : undefined);
     const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
-    const targetCohortName = columns[columnIndex]?.cohort;
-    const cohort = sortedCohorts.find(
-      (c: any) => c.study_year_id === studyYearId && c.cohort_name === targetCohortName,
-    );
+    
+    let slotCohortIds: string[] = [];
+    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
+      if (columnIndex === 1) {
+        // Clicked CM column on the right
+        const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
+        if (cmCohort) slotCohortIds = [String(cmCohort.id)];
+      } else {
+        // Clicked CS column on the left: preselect Combined CS + CM
+        slotCohortIds = sortedCohorts
+          .filter((c: any) => c.study_year_id === 1)
+          .map((c: any) => String(c.id));
+      }
+    } else {
+      const targetCohortName = columns[columnIndex]?.cohort;
+      const cohort = sortedCohorts.find(
+        (c: any) => c.study_year_id === studyYearId && c.cohort_name === targetCohortName,
+      );
+      if (cohort) slotCohortIds = [String(cohort.id)];
+    }
 
     setFormData({
       subject_id: "",
       instructor_id: "",
       room_id: "",
-      cohort_ids: cohort ? [String(cohort.id)] : [],
+      cohort_ids: slotCohortIds,
       day: reverseDayMap[dayFull] || "MON",
       start_time: startTime,
       end_time: endTime,
@@ -465,20 +488,26 @@ export default function LessonsPage() {
 
       if (activeGroup === "Freshman") {
         const hereCohorts = here.map((m) => m.cohortName);
-        const isSharedFreshman = here.length > 1;
 
         if (freshmanSubTab === "main") {
-          // On "Main", show if it includes CM, or if it's a shared/combined freshman class
-          const isCm = hereCohorts.includes("CM");
-          if (!isCm && !isSharedFreshman) continue;
+          // On "Main", show if it includes CM (just CM or combined with CS cohorts)
+          const hasCm = hereCohorts.includes("CM");
+          const hasCs = hereCohorts.some((c) => c.startsWith("CS") || c === "POST_PREP");
+
+          // Only classes with CM belong in Main (pure CS classes belong in CS A & B or Direct & Prep tabs)
+          if (!hasCm) continue;
+
+          // If combined with CS: spans both columns (starts at CS col 0, spans 2 cols across to CM)
+          // If just CM: sits in the right column (col 1: CM, colSpan 1)
+          const isCombinedCs = hasCs;
 
           merged.push({
             ...lesson,
-            columnIndex: 0,
-            columnCount: 1,
-            isCombined: isSharedFreshman,
+            columnIndex: isCombinedCs ? 0 : 1,
+            columnCount: 2,
+            isCombined: isCombinedCs,
             combinedColumnStart: 0,
-            combinedColumnSpan: 1,
+            combinedColumnSpan: isCombinedCs ? 2 : 1,
             cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
             yearCohortIds: here.map((m) => String(m.cohortId)),
             groupByYear,
@@ -839,7 +868,36 @@ export default function LessonsPage() {
                     </label>
                     {/* Quick selection pills for Freshman */}
                     {activeGroup === "Freshman" && (
-                      <div className="flex gap-1 text-[11px]">
+                      <div className="flex flex-wrap gap-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === 1 && c.cohort_name === "CM")
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className={`px-1.5 py-0.5 rounded font-medium transition ${
+                            formData.cohort_ids.length === 1 &&
+                            sortedCohorts.find((c: any) => String(c.id) === formData.cohort_ids[0])?.cohort_name === "CM"
+                              ? "bg-indigo-600 text-white"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          Just CM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = sortedCohorts
+                              .filter((c: any) => c.study_year_id === 1)
+                              .map((c: any) => String(c.id));
+                            setFormData({ ...formData, cohort_ids: ids });
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        >
+                          All (CS + CM)
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -863,18 +921,6 @@ export default function LessonsPage() {
                           className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                         >
                           Direct & Prep
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ids = sortedCohorts
-                              .filter((c: any) => c.study_year_id === 1)
-                              .map((c: any) => String(c.id));
-                            setFormData({ ...formData, cohort_ids: ids });
-                          }}
-                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
-                        >
-                          All
                         </button>
                       </div>
                     )}
