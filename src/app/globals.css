@@ -9,3 +9,35 @@ body {
 .safe-padding {
   padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
+
+/* Nav link hover: line expands from center */
+.nav-link-hover {
+  position: relative;
+  border-bottom: 2px solid transparent !important;
+}
+
+.nav-link-hover::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  transition: width 0.3s ease;
+}
+
+.nav-link-hover:hover::after {
+  width: 100%;
+}
+
+/* Inactive link: slate-300 underline on hover */
+.nav-link-hover.nav-link-inactive::after {
+  background-color: rgb(203 213 225); /* slate-300 */
+}
+
+/* Active link: primary underline always visible */
+.nav-link-hover.nav-link-active::after {
+  width: 100%;
+  background-color: #0f766e;
+}

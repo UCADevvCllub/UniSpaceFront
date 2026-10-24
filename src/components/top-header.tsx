@@ -49,10 +49,10 @@ export function TopHeader() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "inline-block border-b-2 pb-1.5 sm:pb-2 text-[12.6px] sm:text-sm font-semibold uppercase tracking-wide sm:tracking-wider text-slate-500",
+                    "nav-link-hover inline-block pb-1.5 sm:pb-2 text-[12.6px] sm:text-sm font-semibold uppercase tracking-wide sm:tracking-wider text-slate-500",
                     active
-                      ? "border-primary text-slate-900"
-                      : "border-transparent hover:border-slate-300 hover:text-slate-700",
+                      ? "nav-link-active text-slate-900"
+                      : "nav-link-inactive hover:text-slate-700",
                   )}
                 >
                   {item.label}
