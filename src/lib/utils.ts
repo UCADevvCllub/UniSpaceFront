@@ -53,6 +53,7 @@ export function allYearCohorts(yearId: number): { label: string; cohort: string 
       { label: "CS Direct", cohort: "CS_DIRECT" },
       { label: "Post Prep", cohort: "POST_PREP" },
       { label: "CM", cohort: "CM" },
+      { label: "CM Direct", cohort: "CM_DIRECT" },
     ];
   }
 
@@ -67,6 +68,7 @@ export function formatCohortName(cohortName: string): string {
   if (cohortName === "POST_PREP") return "Post Prep";
   if (cohortName === "CS_A") return "CS A";
   if (cohortName === "CS_B") return "CS B";
+  if (cohortName === "CM_DIRECT") return "CM Direct";
   return cohortName.replace("_", " ");
 }
 

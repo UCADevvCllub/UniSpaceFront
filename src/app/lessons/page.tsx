@@ -9,7 +9,7 @@ import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, FreshmanS
 
 import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Pencil } from "lucide-react";
+import { Trash2, Pencil, ChevronDown } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { toast, Toaster } from "sonner";
 
@@ -105,17 +105,19 @@ const yearIdToLabel: Record<number, GroupLabel> = {
   4: "Senior"
 };
 
-const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CS_DIRECT", "POST_PREP", "CM"];
+const COHORT_ORDER = ["CS", "CS_A", "CS_B", "CS_DIRECT", "POST_PREP", "CM", "CM_DIRECT"];
 
-// "CS" or "CM" — the major a cohort belongs to (CS_A / CS_B / CS_DIRECT / POST_PREP are all CS)
-const majorOf = (cohortName: string) => (cohortName.startsWith("CM") ? "CM" : "CS");
-
-// The first message in a DRF 400 body, so the toast says what actually clashed
+// Every message in a DRF 400 body (one per clash), listed in the toast
 const apiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   if (data && typeof data === "object") {
-    const first = Object.values(data)[0];
-    return Array.isArray(first) ? String(first[0]) : String(first);
+    const messages = Object.values(data).flatMap((v) => (Array.isArray(v) ? v : [v])).map(String);
+    if (messages.length === 1) return messages[0];
+    return (
+      <ul className="list-disc pl-4 space-y-0.5">
+        {messages.map((m, i) => <li key={i}>{m}</li>)}
+      </ul>
+    );
   }
   return fallback;
 };
@@ -171,43 +173,31 @@ export default function LessonsPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
-  // Other study years this class is also taught to (same major), ticked in the form
-  const [extraYearIds, setExtraYearIds] = useState<number[]>([]);
-  // When editing: the cohort picker value the form opened with, and the class's cohort ids
-  // per year — so years/cohorts the admin didn't touch are saved exactly as they were.
-  const [editOriginal, setEditOriginal] = useState<{ byYear: Record<number, string[]> } | null>(null);
-
-  // Cohort ids of one major in one year, e.g. Freshman CS -> [CS_A, CS_B, CS_DIRECT, POST_PREP]
-  const majorCohortIds = (yearId: number, major: string) => {
-    const names = allYearCohorts(yearId).map((col) => col.cohort).filter((name) => majorOf(name) === major);
-    return sortedCohorts
-      .filter((c: any) => c.study_year_id === yearId && names.includes(c.cohort_name))
-      .map((c: any) => String(c.id));
-  };
+  // Other study years this class is also taught to: year id -> the cohort ids picked there
+  const [extraYears, setExtraYears] = useState<Record<number, string[]>>({});
+  // Whether the "Share with other study years" section is expanded in the form
+  const [showOtherYears, setShowOtherYears] = useState(false);
 
   // Every cohort the class is for: the cohort(s) picked for the year being viewed, plus the
-  // same major(s) in each ticked extra year.
+  // cohorts ticked under each other study year.
   const buildCohortIds = (): string[] => {
     const current = formData.cohort_ids;
     if (!current || current.length === 0) throw new Error("Select at least one cohort.");
 
-    const majors = new Set(
-      current.map((id) => majorOf(cohorts?.find((c: any) => String(c.id) === id)?.cohort_name ?? "")),
-    );
     const ids = [...current];
-    for (const yearId of extraYearIds) {
-      const existing = editOriginal?.byYear[yearId];
-      if (existing?.length) {
-        ids.push(...existing);
-        continue;
+    for (const [yearId, picked] of Object.entries(extraYears)) {
+      if (picked.length === 0) {
+        throw new Error(`Pick at least one cohort for ${yearIdToLabel[Number(yearId)]}, or untick it.`);
       }
-      for (const major of majors) {
-        const found = majorCohortIds(yearId, major);
-        if (found.length === 0) throw new Error(`There is no ${major} cohort for ${yearIdToLabel[yearId]}.`);
-        ids.push(...found);
-      }
+      ids.push(...picked);
     }
     return Array.from(new Set(ids));
+  };
+
+  // Cohorts that can be picked in a year: Freshman sections, or CS / CM for other years
+  const yearCohortOptions = (yearId: number) => {
+    const allowed = allYearCohorts(yearId).map((c) => c.cohort);
+    return sortedCohorts.filter((c: any) => c.study_year_id === yearId && allowed.includes(c.cohort_name));
   };
 
   const handleEditClick = (lesson: any) => {
@@ -224,8 +214,11 @@ export default function LessonsPage() {
       end_time: lesson.endTime
     });
     setEditingId(lesson.id);
-    setEditOriginal({ byYear: lesson.groupByYear ?? { [lesson.yearId]: yearPart } });
-    setExtraYearIds(Object.keys(lesson.groupByYear ?? {}).map(Number).filter((y) => y !== lesson.yearId));
+    const others = Object.fromEntries(
+      Object.entries(lesson.groupByYear ?? {}).filter(([y]) => Number(y) !== lesson.yearId),
+    ) as Record<number, string[]>;
+    setExtraYears(others);
+    setShowOtherYears(Object.keys(others).length > 0);
     setIsModalOpen(true);
   };
 
@@ -254,8 +247,8 @@ export default function LessonsPage() {
       end_time: "10:30"
     });
     setEditingId(null);
-    setEditOriginal(null);
-    setExtraYearIds([]);
+    setExtraYears({});
+    setShowOtherYears(false);
     setIsModalOpen(true);
   };
 
@@ -303,8 +296,8 @@ export default function LessonsPage() {
       end_time: endTime,
     });
     setEditingId(null);
-    setEditOriginal(null);
-    setExtraYearIds([]);
+    setExtraYears({});
+    setShowOtherYears(false);
     setIsModalOpen(true);
   };
 
@@ -320,8 +313,9 @@ export default function LessonsPage() {
         data: {
           subject_id: lesson.subjectId,
           instructor_id: lesson.instructorId,
-          cohort_ids: lesson.yearCohortIds ?? [String(lesson.cohortId)],
           room_id: lesson.roomId,
+          // Only this year's copy moves; other years sharing the class stay where they are
+          detach: true,
           ...patch,
         },
       },
@@ -362,7 +356,7 @@ export default function LessonsPage() {
 
   const updateMutation = useMutation({
     //object containing both the ID and the Data
-    mutationFn: ({ id, data }: { id: string, data: typeof formData }) =>
+    mutationFn: ({ id, data }: { id: string, data: Partial<typeof formData> & { detach?: boolean } }) =>
       updateClassEvent(id, data),
 
     onSuccess: () => {
@@ -491,7 +485,7 @@ export default function LessonsPage() {
 
         if (freshmanSubTab === "main") {
           // On "Main", show if it includes CM (just CM or combined with CS cohorts)
-          const hasCm = hereCohorts.includes("CM");
+          const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
           const hasCs = hereCohorts.some((c) => c.startsWith("CS") || c === "POST_PREP");
 
           // Only classes with CM belong in Main (pure CS classes belong in CS A & B or Direct & Prep tabs)
@@ -983,29 +977,86 @@ export default function LessonsPage() {
                   </div>
                 </div>
 
-                {/* Other study years taking the same class (same major) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Also for other years</label>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    {groups.filter((g) => g !== activeGroup).map((g) => {
-                      const yearId = academicYearToId[g];
-                      return (
-                        <label key={g} className="flex items-center gap-1.5 text-sm text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={extraYearIds.includes(yearId)}
-                            onChange={(e) =>
-                              setExtraYearIds(e.target.checked
-                                ? [...extraYearIds, yearId]
-                                : extraYearIds.filter((y) => y !== yearId))
-                            }
-                          />
-                          {g}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-slate-400">Adds the same major (CS or CM) in those years. Freshman CS means both CS A and CS B.</p>
+                {/* Other study years taking the same class; each year picks its own cohorts */}
+                <div className="rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowOtherYears(!showOtherYears)}
+                    aria-expanded={showOtherYears}
+                    className="flex w-full items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase"
+                  >
+                    <span>
+                      Share with other study years
+                      {Object.keys(extraYears).length > 0 && (
+                        <span className="ml-1 normal-case font-semibold text-indigo-600">
+                          ({Object.keys(extraYears).map((y) => yearIdToLabel[Number(y)]).join(", ")})
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showOtherYears ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {showOtherYears && (
+                    <div className="space-y-2 border-t border-slate-200 p-2.5">
+                      {groups.filter((g) => g !== activeGroup).map((g) => {
+                        const yearId = academicYearToId[g];
+                        const picked = extraYears[yearId];
+                        return (
+                          <div key={g} className="space-y-1.5">
+                            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={picked !== undefined}
+                                onChange={(e) => {
+                                  const next = { ...extraYears };
+                                  if (e.target.checked) next[yearId] = [];
+                                  else delete next[yearId];
+                                  setExtraYears(next);
+                                }}
+                              />
+                              {g}
+                            </label>
+                            {picked !== undefined && (
+                              <div className="flex flex-wrap gap-2 pl-5">
+                                {yearCohortOptions(yearId).map((c: any) => {
+                                  const idStr = String(c.id);
+                                  const isChecked = picked.includes(idStr);
+                                  return (
+                                    <label
+                                      key={c.id}
+                                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${
+                                        isChecked
+                                          ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
+                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                                        checked={isChecked}
+                                        onChange={(e) =>
+                                          setExtraYears({
+                                            ...extraYears,
+                                            [yearId]: e.target.checked
+                                              ? [...picked, idStr]
+                                              : picked.filter((id) => id !== idStr),
+                                          })
+                                        }
+                                      />
+                                      {formatCohortName(c.cohort_name)}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <p className="text-[11px] text-slate-400">
+                        Tick a year, then pick its cohorts. Each year can be CS, CM or both.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

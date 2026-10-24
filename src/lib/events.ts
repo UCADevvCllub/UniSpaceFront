@@ -179,6 +179,8 @@ export async function updateClassEvent(id: string, data: any) {
     payload.cohort_id = parseInt(data.cohort_id);
   }
 
+  if (data.detach) payload.detach = true;
+
   return djangoApi.patch(`/api/class-events/${id}/`, payload);
 }
 
