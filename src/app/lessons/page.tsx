@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -265,7 +265,7 @@ export default function LessonsPage() {
     const studyYearId = academicYearToId[activeGroup];
     const columns = yearColumns(studyYearId, activeGroup === "Freshman" ? freshmanSubTab : undefined);
     const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
-    
+
     let slotCohortIds: string[] = [];
     if (activeGroup === "Freshman" && freshmanSubTab === "main") {
       if (columnIndex === 1) {
@@ -430,6 +430,28 @@ export default function LessonsPage() {
 
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
   const [freshmanSubTab, setFreshmanSubTab] = useState<FreshmanSubTab>("main");
+  const [freshmanDropdownOpen, setFreshmanDropdownOpen] = useState(false);
+  const freshmanBtnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click / tap
+  useEffect(() => {
+    if (!freshmanDropdownOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        freshmanBtnRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) return;
+      setFreshmanDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [freshmanDropdownOpen]);
   const activeColumns = yearColumns(academicYearToId[activeGroup], activeGroup === "Freshman" ? freshmanSubTab : undefined);
 
   const [isScrolledRight, setIsScrolledRight] = useState(false);
@@ -586,17 +608,80 @@ export default function LessonsPage() {
         {/* --- NAVBAR --- */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            {groups.map((group) => (
-              <button
-                key={group}
-                onClick={() => setActiveGroup(group)}
-                className={group === activeGroup
-                  ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
-                  : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
-              >
-                {group}
-              </button>
-            ))}
+            {groups.map((group) => {
+              if (group === "Freshman") {
+                // Freshman button with dropdown
+                const subTabLabels: Record<FreshmanSubTab, string> = {
+                  main: "Main",
+                  cs_ab: "CS A & CS B",
+                  cs_direct_prep: "CS Direct & Post Prep",
+                };
+                const isActive = activeGroup === "Freshman";
+                return (
+                  <div key={group} className="relative">
+                    <button
+                      ref={freshmanBtnRef}
+                      onClick={() => setFreshmanDropdownOpen((o) => !o)}
+                      className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors ${isActive
+                          ? "bg-primary text-white shadow-md"
+                          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                    >
+                      <span>Freshman</span>
+                      <ChevronDown
+                        size={14}
+                        className={`transition-transform duration-200 ${freshmanDropdownOpen ? "rotate-180" : ""
+                          }`}
+                      />
+                    </button>
+
+                    {/* Dropdown menu */}
+                    <div
+                      ref={dropdownRef}
+                      className={`absolute left-0 top-full mt-1.5 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg transition-all duration-200 origin-top ${freshmanDropdownOpen
+                          ? "opacity-100 scale-y-100 pointer-events-auto"
+                          : "opacity-0 scale-y-0 pointer-events-none"
+                        }`}
+                      style={{ minWidth: freshmanBtnRef.current?.offsetWidth ?? "auto" }}
+                    >
+                      {(["main", "cs_ab", "cs_direct_prep"] as FreshmanSubTab[]).map(
+                        (tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => {
+                              setActiveGroup("Freshman");
+                              setFreshmanSubTab(tab);
+                              setFreshmanDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${freshmanSubTab === tab
+                                ? "bg-slate-900 text-white"
+                                : "text-slate-700 hover:bg-slate-100"
+                              }`}
+                          >
+                            {subTabLabels[tab]}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              // Other year buttons
+              return (
+                <button
+                  key={group}
+                  onClick={() => {
+                    setActiveGroup(group);
+                    setFreshmanDropdownOpen(false);
+                  }}
+                  className={group === activeGroup
+                    ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
+                    : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
+                >
+                  {group}
+                </button>
+              );
+            })}
           </div>
           {isAdmin && (
             <Button
@@ -607,43 +692,6 @@ export default function LessonsPage() {
             </Button>
           )}
         </div>
-
-        {/* --- FRESHMAN SUB-CATEGORIES --- */}
-        {activeGroup === "Freshman" && (
-          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1 border-b border-slate-200">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Tracks:</span>
-            <button
-              onClick={() => setFreshmanSubTab("main")}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                freshmanSubTab === "main"
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Main
-            </button>
-            <button
-              onClick={() => setFreshmanSubTab("cs_ab")}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                freshmanSubTab === "cs_ab"
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              CS A & CS B
-            </button>
-            <button
-              onClick={() => setFreshmanSubTab("cs_direct_prep")}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                freshmanSubTab === "cs_direct_prep"
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              CS Direct & Post Prep
-            </button>
-          </div>
-        )}
 
         {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) ---
             Full-bleed: breaks out of the page's max-w-4xl column (which keeps the title/tabs
@@ -663,16 +711,14 @@ export default function LessonsPage() {
                 <div style={{ minWidth: activeColumns.length === 3 ? 1695 : activeColumns.length === 1 ? 900 : 1252 }}>
                   {/* Header Days */}
                   <div
-                    className={`grid ${
-                      isScrolledRight
+                    className={`grid ${isScrolledRight
                         ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
                         : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
-                    } border-b border-slate-200 bg-slate-50/80 transition-[grid-template-columns] duration-200`}
+                      } border-b border-slate-200 bg-slate-50/80 transition-[grid-template-columns] duration-200`}
                   >
                     <div
-                      className={`border-r border-slate-200 font-bold text-slate-400 flex items-center justify-center sticky left-0 z-20 bg-slate-50 transition-all duration-200 ${
-                        isScrolledRight ? "text-[6.5px] px-[1px] py-1" : "text-[7.5px] sm:text-[8px] p-1 sm:p-2.5"
-                      }`}
+                      className={`border-r border-slate-200 font-bold text-slate-400 flex items-center justify-center sticky left-0 z-20 bg-slate-50 transition-all duration-200 ${isScrolledRight ? "text-[6.5px] px-[1px] py-1" : "text-[7.5px] sm:text-[8px] p-1 sm:p-2.5"
+                        }`}
                     >
                       TIME
                     </div>
@@ -694,28 +740,26 @@ export default function LessonsPage() {
 
                   {/* Grid Body */}
                   <div
-                    className={`grid ${
-                      isScrolledRight
+                    className={`grid ${isScrolledRight
                         ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
                         : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
-                    } relative h-[763px] bg-white transition-[grid-template-columns] duration-200`}
+                      } relative h-[763px] bg-white transition-[grid-template-columns] duration-200`}
                   >
                     {/* Time Axis */}
                     <div className="border-r border-slate-200 bg-slate-50 sticky left-0 z-20 transition-all duration-200 shadow-[1px_0_3px_rgba(0,0,0,0.04)]">
                       {Array.from({ length: 14 }).map((_, i) => (
                         <div
                           key={i}
-                          className={`absolute w-full text-[9px] text-slate-400 font-bold ${
-                            isScrolledRight ? "pr-[3px]" : "pr-2"
-                          } text-right transition-all duration-200`}
+                          className={`absolute w-full text-[9px] text-slate-400 font-bold ${isScrolledRight ? "pr-[3px]" : "pr-2"
+                            } text-right transition-all duration-200`}
                           style={{
                             top: `${(i * 60 / CALENDAR_DURATION) * 100}%`,
                             transform:
                               i === 0
                                 ? "translateY(2px)"
                                 : i === 13
-                                ? "translateY(calc(-100% - 2px))"
-                                : "translateY(-50%)",
+                                  ? "translateY(calc(-100% - 2px))"
+                                  : "translateY(-50%)",
                           }}
                         >
                           {String(8 + i).padStart(2, '0')}:00
@@ -871,12 +915,11 @@ export default function LessonsPage() {
                               .map((c: any) => String(c.id));
                             setFormData({ ...formData, cohort_ids: ids });
                           }}
-                          className={`px-1.5 py-0.5 rounded font-medium transition ${
-                            formData.cohort_ids.length === 1 &&
-                            sortedCohorts.find((c: any) => String(c.id) === formData.cohort_ids[0])?.cohort_name === "CM"
+                          className={`px-1.5 py-0.5 rounded font-medium transition ${formData.cohort_ids.length === 1 &&
+                              sortedCohorts.find((c: any) => String(c.id) === formData.cohort_ids[0])?.cohort_name === "CM"
                               ? "bg-indigo-600 text-white"
                               : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                          }`}
+                            }`}
                         >
                           Just CM
                         </button>
@@ -951,11 +994,10 @@ export default function LessonsPage() {
                         return (
                           <label
                             key={c.id}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${
-                              isChecked
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${isChecked
                                 ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
                                 : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -1024,11 +1066,10 @@ export default function LessonsPage() {
                                   return (
                                     <label
                                       key={c.id}
-                                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${
-                                        isChecked
+                                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${isChecked
                                           ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
                                           : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                                      }`}
+                                        }`}
                                     >
                                       <input
                                         type="checkbox"
@@ -1128,6 +1169,8 @@ function LessonCard({
   const effectiveEnd = resizePreview?.end_time ?? lesson.endTime;
   const startMins = timeToMinutes(lesson.startTime);
   const endMins = timeToMinutes(lesson.endTime);
+  const durationMins = endMins - startMins;
+  const isCompact = durationMins <= 45;
   const top = percentOfCalendar(startMins);
   const height = percentOfCalendar(endMins) - percentOfCalendar(startMins);
   // A combined lesson spans exactly the columns its two cohorts sit in (e.g. CS_A+CS_B
@@ -1256,18 +1299,18 @@ function LessonCard({
           </motion.div>
         );
       })}
-      <div className="flex items-baseline gap-1 text-[9px] font-bold leading-tight">
+      <div className={`flex items-baseline gap-1 ${isCompact ? "text-[7px]" : "text-[9px]"} font-bold leading-tight`}>
         <span className="min-w-0 truncate">{lesson.title}</span>
         {lesson.isCombined && (
           <span className="shrink-0 font-semibold opacity-70">({lesson.cohortLabel})</span>
         )}
       </div>
       {lesson.otherYears?.length > 0 && (
-        <div className="text-[8px] font-semibold truncate leading-tight">Shared with: {lesson.otherYears.join(", ")}</div>
+        <div className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-semibold truncate leading-tight`}>Shared with: {lesson.otherYears.join(", ")}</div>
       )}
-      <div className="text-[8px] font-medium leading-tight">{effectiveStart}-{effectiveEnd}</div>
-      <div className="text-[8px] font-medium truncate leading-tight">{lesson.instructor}</div>
-      <div className={`text-[8px] font-bold mt-0.5 uppercase leading-tight ${isShared ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
+      <div className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-medium leading-tight`}>{effectiveStart}-{effectiveEnd}</div>
+      <div className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-medium truncate leading-tight`}>{lesson.instructor}</div>
+      <div className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-bold ${isCompact ? "" : "mt-0.5"} uppercase leading-tight ${isShared ? "text-purple-900" : "text-indigo-900"}`}>{lesson.room}</div>
 
       {isAdmin && (
         <button
