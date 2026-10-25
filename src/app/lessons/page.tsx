@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fetchClassEvents, djangoApi, deleteClassEvent, updateClassEvent, fetchSubjects, fetchInstructors, fetchRooms, fetchCohorts } from "@/lib/events";
-import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, FreshmanSubTab, reverseDayMap } from "@/lib/utils";
+import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, reverseDayMap } from "@/lib/utils";
 
 import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,12 @@ import { toast, Toaster } from "sonner";
 
 
 const groups = ["Freshman", "Sophomore", "Junior", "Senior"] as const;
+
+// Freshman schedule switchers: each toggles which section of the pair is added to the CS column
+const freshmanSectionPairs: [string, string][] = [
+  ["CS_A", "CS_B"],
+  ["CS_DIRECT", "POST_PREP"],
+];
 type GroupLabel = (typeof groups)[number];
 
 
@@ -227,7 +233,7 @@ export default function LessonsPage() {
     if (!isAdmin) return;
     const targetYearId = academicYearToId[activeGroup];
     let defaultIds: string[] = [];
-    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
+    if (activeGroup === "Freshman") {
       const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
       if (cmCohort) defaultIds = [String(cmCohort.id)];
     } else {
@@ -263,19 +269,19 @@ export default function LessonsPage() {
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
     const studyYearId = academicYearToId[activeGroup];
-    const columns = yearColumns(studyYearId, activeGroup === "Freshman" ? freshmanSubTab : undefined);
+    const columns = yearColumns(studyYearId);
     const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
 
     let slotCohortIds: string[] = [];
-    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
+    if (activeGroup === "Freshman") {
       if (columnIndex === 1) {
         // Clicked CM column on the right
         const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
         if (cmCohort) slotCohortIds = [String(cmCohort.id)];
       } else {
-        // Clicked CS column on the left: preselect Combined CS + CM
+        // Clicked CS column on the left: preselect the sections picked in the switchers
         slotCohortIds = sortedCohorts
-          .filter((c: any) => c.study_year_id === 1)
+          .filter((c: any) => c.study_year_id === 1 && freshmanSections.includes(c.cohort_name))
           .map((c: any) => String(c.id));
       }
     } else {
@@ -429,30 +435,9 @@ export default function LessonsPage() {
   };
 
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
-  const [freshmanSubTab, setFreshmanSubTab] = useState<FreshmanSubTab>("main");
-  const [freshmanDropdownOpen, setFreshmanDropdownOpen] = useState(false);
-  const freshmanBtnRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click / tap
-  useEffect(() => {
-    if (!freshmanDropdownOpen) return;
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node;
-      if (
-        freshmanBtnRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) return;
-      setFreshmanDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [freshmanDropdownOpen]);
-  const activeColumns = yearColumns(academicYearToId[activeGroup], activeGroup === "Freshman" ? freshmanSubTab : undefined);
+  // Picked section of each Freshman switcher pair: [CS_A | CS_B, CS_DIRECT | POST_PREP]
+  const [freshmanSections, setFreshmanSections] = useState<string[]>(freshmanSectionPairs.map(([off]) => off));
+  const activeColumns = yearColumns(academicYearToId[activeGroup]);
 
   const [isScrolledRight, setIsScrolledRight] = useState(false);
 
@@ -467,7 +452,7 @@ export default function LessonsPage() {
 
   useEffect(() => {
     setIsScrolledRight(false);
-  }, [activeGroup, freshmanSubTab]);
+  }, [activeGroup]);
 
 
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
@@ -505,73 +490,39 @@ export default function LessonsPage() {
       if (activeGroup === "Freshman") {
         const hereCohorts = here.map((m) => m.cohortName);
 
-        if (freshmanSubTab === "main") {
-          // On "Main", show if it includes CM (just CM or combined with CS cohorts)
-          const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
-          const hasCs = hereCohorts.some((c) => c.startsWith("CS") || c === "POST_PREP");
+        const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
+        const hasCs = hereCohorts.some((c) => c.startsWith("CS") || c === "POST_PREP");
 
-          // Only classes with CM belong in Main (pure CS classes belong in CS A & B or Direct & Prep tabs)
-          if (!hasCm) continue;
-
-          // If combined with CS: spans both columns (starts at CS col 0, spans 2 cols across to CM)
-          // If just CM: sits in the right column (col 1: CM, colSpan 1)
-          const isCombinedCs = hasCs;
-
-          merged.push({
-            ...lesson,
-            columnIndex: isCombinedCs ? 0 : 1,
-            columnCount: 2,
-            isCombined: isCombinedCs,
-            combinedColumnStart: 0,
-            combinedColumnSpan: isCombinedCs ? 2 : 1,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
-        } else if (freshmanSubTab === "cs_ab") {
-          const cols = ["CS_A", "CS_B"];
-          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
-          if (matchingMembers.length === 0) continue;
-
-          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
-          const colStart = Math.min(...colIndices);
-          const colSpan = Math.max(...colIndices) - colStart + 1;
-
-          merged.push({
-            ...lesson,
-            columnIndex: colStart,
-            columnCount: 2,
-            isCombined: matchingMembers.length > 1 || here.length > 1,
-            combinedColumnStart: colStart,
-            combinedColumnSpan: colSpan,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
-        } else if (freshmanSubTab === "cs_direct_prep") {
-          const cols = ["CS_DIRECT", "POST_PREP"];
-          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
-          if (matchingMembers.length === 0) continue;
-
-          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
-          const colStart = Math.min(...colIndices);
-          const colSpan = Math.max(...colIndices) - colStart + 1;
-
-          merged.push({
-            ...lesson,
-            columnIndex: colStart,
-            columnCount: 2,
-            isCombined: matchingMembers.length > 1 || here.length > 1,
-            combinedColumnStart: colStart,
-            combinedColumnSpan: colSpan,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
+        // 4 lanes: CS column = lanes 0-1 (lane 0: picked A/B section, lane 1: picked Direct/Post Prep section),
+        // CM column = lanes 2-3. Section lanes keep A/B and Direct/Post Prep lessons from overlapping.
+        let colStart: number;
+        let colSpan: number;
+        if (hasCm) {
+          // CM lessons always show: combined with CS spans the full width, CM-only sits in the CM column
+          colStart = hasCs ? 0 : 2;
+          colSpan = hasCs ? 4 : 2;
+        } else {
+          // Pure CS lessons show only when attended by a section picked in the switchers
+          const inAb = hereCohorts.includes(freshmanSections[0]) || hereCohorts.includes("CS");
+          const inDirect = hereCohorts.includes(freshmanSections[1]) || hereCohorts.includes("CS");
+          if (!inAb && !inDirect) continue;
+          colStart = inAb ? 0 : 1;
+          colSpan = inAb && inDirect ? 2 : 1;
         }
+
+        merged.push({
+          ...lesson,
+          columnIndex: colStart,
+          columnCount: 4,
+          columnSpan: colSpan,
+          isCombined: here.length > 1,
+          combinedColumnStart: colStart,
+          combinedColumnSpan: colSpan,
+          cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+          yearCohortIds: here.map((m) => String(m.cohortId)),
+          groupByYear,
+          otherYears,
+        });
       } else {
         const cols = ["CS", "CM"];
         const colIndices = here.map((m) => {
@@ -595,8 +546,27 @@ export default function LessonsPage() {
         });
       }
     }
+    if (activeGroup === "Freshman") {
+      // A section lesson only needs its half-width lane when it clashes with the other lane;
+      // otherwise it fills the whole CS column.
+      const laneLessons = merged.filter((l) => l.columnCount === 4 && l.columnSpan === 1);
+      const unclashed = laneLessons.filter((l) => {
+        const start = timeToMinutes(l.startTime);
+        const end = timeToMinutes(l.endTime);
+        return !laneLessons.some((o) =>
+          o.day === l.day && o.columnIndex !== l.columnIndex &&
+          timeToMinutes(o.startTime) < end && start < timeToMinutes(o.endTime),
+        );
+      });
+      for (const l of unclashed) {
+        l.columnIndex = 0;
+        l.columnSpan = 2;
+        l.combinedColumnStart = 0;
+        l.combinedColumnSpan = 2;
+      }
+    }
     return merged;
-  }, [allLessons, activeGroup, freshmanSubTab]);
+  }, [allLessons, activeGroup, freshmanSections]);
 
 
 
@@ -609,71 +579,10 @@ export default function LessonsPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {groups.map((group) => {
-              if (group === "Freshman") {
-                // Freshman button with dropdown
-                const subTabLabels: Record<FreshmanSubTab, string> = {
-                  main: "Main",
-                  cs_ab: "CS A & CS B",
-                  cs_direct_prep: "CS Direct & Post Prep",
-                };
-                const isActive = activeGroup === "Freshman";
-                return (
-                  <div key={group} className="relative">
-                    <button
-                      ref={freshmanBtnRef}
-                      onClick={() => setFreshmanDropdownOpen((o) => !o)}
-                      className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors ${isActive
-                          ? "bg-primary text-white shadow-md"
-                          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                    >
-                      <span>Freshman</span>
-                      <ChevronDown
-                        size={14}
-                        className={`transition-transform duration-200 ${freshmanDropdownOpen ? "rotate-180" : ""
-                          }`}
-                      />
-                    </button>
-
-                    {/* Dropdown menu */}
-                    <div
-                      ref={dropdownRef}
-                      className={`absolute left-0 top-full mt-1.5 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg transition-all duration-200 origin-top ${freshmanDropdownOpen
-                          ? "opacity-100 scale-y-100 pointer-events-auto"
-                          : "opacity-0 scale-y-0 pointer-events-none"
-                        }`}
-                      style={{ minWidth: freshmanBtnRef.current?.offsetWidth ?? "auto" }}
-                    >
-                      {(["main", "cs_ab", "cs_direct_prep"] as FreshmanSubTab[]).map(
-                        (tab) => (
-                          <button
-                            key={tab}
-                            onClick={() => {
-                              setActiveGroup("Freshman");
-                              setFreshmanSubTab(tab);
-                              setFreshmanDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${freshmanSubTab === tab
-                                ? "bg-slate-900 text-white"
-                                : "text-slate-700 hover:bg-slate-100"
-                              }`}
-                          >
-                            {subTabLabels[tab]}
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              // Other year buttons
               return (
                 <button
                   key={group}
-                  onClick={() => {
-                    setActiveGroup(group);
-                    setFreshmanDropdownOpen(false);
-                  }}
+                  onClick={() => setActiveGroup(group)}
                   className={group === activeGroup
                     ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
                     : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
@@ -700,9 +609,45 @@ export default function LessonsPage() {
         {academicYearToId[activeGroup] && (
           <div className="relative left-1/2 right-1/2 w-screen -mx-[50vw] px-4 sm:px-6 lg:px-10">
             <Card className="p-6 border-slate-200 bg-slate-50/50">
-              <h2 className="text-xl font-bold mb-4">
-                {activeGroup} Schedule {activeGroup === "Freshman" ? (freshmanSubTab === "main" ? "— Main" : freshmanSubTab === "cs_ab" ? "— CS A & CS B" : "— CS Direct & Post Prep") : ""}
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-xl font-bold">{activeGroup} Schedule</h2>
+                {activeGroup === "Freshman" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {freshmanSectionPairs.map(([off, on], pairIdx) => {
+                      const picked = freshmanSections[pairIdx];
+                      const isOn = picked === on;
+                      const pick = (section: string) =>
+                        setFreshmanSections((prev) => prev.map((s, i) => (i === pairIdx ? section : s)));
+                      const labelClass = (section: string) =>
+                        `whitespace-nowrap transition-colors ${picked === section ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}`;
+                      return (
+                        <div
+                          key={off}
+                          className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium shadow-sm"
+                        >
+                          <button onClick={() => pick(off)} className={labelClass(off)}>
+                            {formatCohortName(off)}
+                          </button>
+                          <button
+                            role="switch"
+                            aria-checked={isOn}
+                            aria-label={`Switch between ${formatCohortName(off)} and ${formatCohortName(on)}`}
+                            onClick={() => pick(isOn ? off : on)}
+                            className="relative h-4 w-7 shrink-0 rounded-full bg-slate-900 transition-colors"
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${isOn ? "translate-x-3" : ""}`}
+                            />
+                          </button>
+                          <button onClick={() => pick(on)} className={labelClass(on)}>
+                            {formatCohortName(on)}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <div
                 className="overflow-x-auto overflow-y-hidden border border-slate-200 bg-white rounded-2xl shadow-sm"
@@ -1176,7 +1121,7 @@ function LessonCard({
   // A combined lesson spans exactly the columns its two cohorts sit in (e.g. CS_A+CS_B
   // covers 2 of Freshman's 3 columns, leaving CM's column alone) — not always the full width.
   const colStart = lesson.isCombined ? lesson.combinedColumnStart : lesson.columnIndex;
-  const colSpan = lesson.isCombined ? lesson.combinedColumnSpan : 1;
+  const colSpan = lesson.isCombined ? lesson.combinedColumnSpan : (lesson.columnSpan ?? 1);
   const leftFraction = colStart / lesson.columnCount;
   // Purple for any class taught to more than one cohort, in this year or across years
   const isShared = lesson.isCombined || lesson.otherYears?.length > 0;

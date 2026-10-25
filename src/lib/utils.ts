@@ -13,31 +13,9 @@ export const reverseDayMap: Record<string, string> = {
 
 export const FRESHMAN_YEAR_ID = 1;
 
-export type FreshmanSubTab = "main" | "cs_ab" | "cs_direct_prep";
-
-// The sub-columns inside each day column:
-// For Freshman: "main" (CM / combined), "cs_ab" (CS A | CS B), "cs_direct_prep" (CS Direct | Post Prep).
-// For other years: CS | CM.
-export function yearColumns(yearId: number, subTab: FreshmanSubTab = "main"): { label: string; cohort: string }[] {
-  if (yearId === FRESHMAN_YEAR_ID) {
-    if (subTab === "cs_ab") {
-      return [
-        { label: "CS A", cohort: "CS_A" },
-        { label: "CS B", cohort: "CS_B" },
-      ];
-    }
-    if (subTab === "cs_direct_prep") {
-      return [
-        { label: "CS Direct", cohort: "CS_DIRECT" },
-        { label: "Post Prep", cohort: "POST_PREP" },
-      ];
-    }
-    return [
-      { label: "CS", cohort: "CS" },
-      { label: "CM", cohort: "CM" },
-    ];
-  }
-
+// The sub-columns inside each day column: CS | CM for every year.
+// (Freshman's CS column additionally shows the CS sections picked in the lessons page switchers.)
+export function yearColumns(_yearId: number): { label: string; cohort: string }[] {
   return [
     { label: "CS", cohort: "CS" },
     { label: "CM", cohort: "CM" },
