@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fetchClassEvents, djangoApi, deleteClassEvent, updateClassEvent, fetchSubjects, fetchInstructors, fetchRooms, fetchCohorts } from "@/lib/events";
-import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, FreshmanSubTab, reverseDayMap } from "@/lib/utils";
+import { mapDjangoToUi, yearColumns, allYearCohorts, formatCohortName, reverseDayMap, CsSection, CsTrack, FreshmanToggles } from "@/lib/utils";
 
 import { motion, useMotionValue, PanInfo } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -227,9 +227,12 @@ export default function LessonsPage() {
     if (!isAdmin) return;
     const targetYearId = academicYearToId[activeGroup];
     let defaultIds: string[] = [];
-    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
-      const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
-      if (cmCohort) defaultIds = [String(cmCohort.id)];
+    if (activeGroup === "Freshman") {
+      // Pre-select the currently toggled section + track cohorts
+      const sectionCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === csSection);
+      const trackCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === csTrack);
+      if (sectionCohort) defaultIds.push(String(sectionCohort.id));
+      if (trackCohort) defaultIds.push(String(trackCohort.id));
     } else {
       const defaultCohort = sortedCohorts.find(
         (c: any) => c.study_year_id === targetYearId && c.cohort_name === activeColumns[0]?.cohort,
@@ -263,20 +266,25 @@ export default function LessonsPage() {
     const endTime = minutesToTimeStr(timeToMinutes(startTime) + 90);
 
     const studyYearId = academicYearToId[activeGroup];
-    const columns = yearColumns(studyYearId, activeGroup === "Freshman" ? freshmanSubTab : undefined);
+    const columns = yearColumns(
+      studyYearId,
+      undefined,
+      activeGroup === "Freshman" ? freshmanToggles : undefined,
+    );
     const columnIndex = Math.min(columns.length - 1, Math.max(0, Math.floor((offsetX / rect.width) * columns.length)));
 
     let slotCohortIds: string[] = [];
-    if (activeGroup === "Freshman" && freshmanSubTab === "main") {
+    if (activeGroup === "Freshman") {
       if (columnIndex === 1) {
         // Clicked CM column on the right
         const cmCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === "CM");
         if (cmCohort) slotCohortIds = [String(cmCohort.id)];
       } else {
-        // Clicked CS column on the left: preselect Combined CS + CM
-        slotCohortIds = sortedCohorts
-          .filter((c: any) => c.study_year_id === 1)
-          .map((c: any) => String(c.id));
+        // Clicked the CS section+track column on the left: preselect both
+        const sectionCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === csSection);
+        const trackCohort = sortedCohorts.find((c: any) => c.study_year_id === 1 && c.cohort_name === csTrack);
+        if (sectionCohort) slotCohortIds.push(String(sectionCohort.id));
+        if (trackCohort) slotCohortIds.push(String(trackCohort.id));
       }
     } else {
       const targetCohortName = columns[columnIndex]?.cohort;
@@ -429,30 +437,17 @@ export default function LessonsPage() {
   };
 
   const [activeGroup, setActiveGroup] = useState<GroupLabel>("Freshman");
-  const [freshmanSubTab, setFreshmanSubTab] = useState<FreshmanSubTab>("main");
-  const [freshmanDropdownOpen, setFreshmanDropdownOpen] = useState(false);
-  const freshmanBtnRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // New toggle-based state for Freshman sub-views
+  const [csSection, setCsSection] = useState<CsSection>("CS_A");
+  const [csTrack, setCsTrack] = useState<CsTrack>("CS_DIRECT");
+  const freshmanToggles: FreshmanToggles = useMemo(() => ({ section: csSection, track: csTrack }), [csSection, csTrack]);
 
-  // Close dropdown on outside click / tap
-  useEffect(() => {
-    if (!freshmanDropdownOpen) return;
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node;
-      if (
-        freshmanBtnRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) return;
-      setFreshmanDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [freshmanDropdownOpen]);
-  const activeColumns = yearColumns(academicYearToId[activeGroup], activeGroup === "Freshman" ? freshmanSubTab : undefined);
+
+  const activeColumns = yearColumns(
+    academicYearToId[activeGroup],
+    undefined,
+    activeGroup === "Freshman" ? freshmanToggles : undefined,
+  );
 
   const [isScrolledRight, setIsScrolledRight] = useState(false);
 
@@ -467,7 +462,7 @@ export default function LessonsPage() {
 
   useEffect(() => {
     setIsScrolledRight(false);
-  }, [activeGroup, freshmanSubTab]);
+  }, [activeGroup, csSection, csTrack]);
 
 
   const { data: djangoData, isLoading: isDjangoLoading } = useQuery({
@@ -505,73 +500,32 @@ export default function LessonsPage() {
       if (activeGroup === "Freshman") {
         const hereCohorts = here.map((m) => m.cohortName);
 
-        if (freshmanSubTab === "main") {
-          // On "Main", show if it includes CM (just CM or combined with CS cohorts)
-          const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
-          const hasCs = hereCohorts.some((c) => c.startsWith("CS") || c === "POST_PREP");
+        // Which cohorts belong in the left (CS) column for the current toggle setting?
+        const leftCohorts = [csSection, csTrack]; // e.g. ["CS_A", "CS_DIRECT"]
+        const hasLeft = hereCohorts.some((c) => leftCohorts.includes(c));
+        const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
 
-          // Only classes with CM belong in Main (pure CS classes belong in CS A & B or Direct & Prep tabs)
-          if (!hasCm) continue;
+        // Skip lessons that match neither the selected toggles nor CM
+        if (!hasLeft && !hasCm) continue;
 
-          // If combined with CS: spans both columns (starts at CS col 0, spans 2 cols across to CM)
-          // If just CM: sits in the right column (col 1: CM, colSpan 1)
-          const isCombinedCs = hasCs;
+        // Determine column placement
+        const isCombined = hasLeft && hasCm;
+        const columnIndex = hasLeft ? 0 : 1;
+        const combinedColumnStart = isCombined ? 0 : columnIndex;
+        const combinedColumnSpan = isCombined ? 2 : 1;
 
-          merged.push({
-            ...lesson,
-            columnIndex: isCombinedCs ? 0 : 1,
-            columnCount: 2,
-            isCombined: isCombinedCs,
-            combinedColumnStart: 0,
-            combinedColumnSpan: isCombinedCs ? 2 : 1,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
-        } else if (freshmanSubTab === "cs_ab") {
-          const cols = ["CS_A", "CS_B"];
-          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
-          if (matchingMembers.length === 0) continue;
-
-          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
-          const colStart = Math.min(...colIndices);
-          const colSpan = Math.max(...colIndices) - colStart + 1;
-
-          merged.push({
-            ...lesson,
-            columnIndex: colStart,
-            columnCount: 2,
-            isCombined: matchingMembers.length > 1 || here.length > 1,
-            combinedColumnStart: colStart,
-            combinedColumnSpan: colSpan,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
-        } else if (freshmanSubTab === "cs_direct_prep") {
-          const cols = ["CS_DIRECT", "POST_PREP"];
-          const matchingMembers = here.filter((m) => cols.includes(m.cohortName));
-          if (matchingMembers.length === 0) continue;
-
-          const colIndices = matchingMembers.map((m) => cols.indexOf(m.cohortName)).filter((i) => i >= 0);
-          const colStart = Math.min(...colIndices);
-          const colSpan = Math.max(...colIndices) - colStart + 1;
-
-          merged.push({
-            ...lesson,
-            columnIndex: colStart,
-            columnCount: 2,
-            isCombined: matchingMembers.length > 1 || here.length > 1,
-            combinedColumnStart: colStart,
-            combinedColumnSpan: colSpan,
-            cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
-            yearCohortIds: here.map((m) => String(m.cohortId)),
-            groupByYear,
-            otherYears,
-          });
-        }
+        merged.push({
+          ...lesson,
+          columnIndex,
+          columnCount: 2,
+          isCombined,
+          combinedColumnStart,
+          combinedColumnSpan,
+          cohortLabel: here.map((m) => formatCohortName(m.cohortName)).join(" + "),
+          yearCohortIds: here.map((m) => String(m.cohortId)),
+          groupByYear,
+          otherYears,
+        });
       } else {
         const cols = ["CS", "CM"];
         const colIndices = here.map((m) => {
@@ -596,7 +550,7 @@ export default function LessonsPage() {
       }
     }
     return merged;
-  }, [allLessons, activeGroup, freshmanSubTab]);
+  }, [allLessons, activeGroup, csSection, csTrack]);
 
 
 
@@ -610,70 +564,25 @@ export default function LessonsPage() {
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {groups.map((group) => {
               if (group === "Freshman") {
-                // Freshman button with dropdown
-                const subTabLabels: Record<FreshmanSubTab, string> = {
-                  main: "Main",
-                  cs_ab: "CS A & CS B",
-                  cs_direct_prep: "CS Direct & Post Prep",
-                };
                 const isActive = activeGroup === "Freshman";
                 return (
-                  <div key={group} className="relative">
-                    <button
-                      ref={freshmanBtnRef}
-                      onClick={() => setFreshmanDropdownOpen((o) => !o)}
-                      className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors ${isActive
-                          ? "bg-primary text-white shadow-md"
-                          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                    >
-                      <span>Freshman</span>
-                      <ChevronDown
-                        size={14}
-                        className={`transition-transform duration-200 ${freshmanDropdownOpen ? "rotate-180" : ""
-                          }`}
-                      />
-                    </button>
-
-                    {/* Dropdown menu */}
-                    <div
-                      ref={dropdownRef}
-                      className={`absolute left-0 top-full mt-1.5 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg transition-all duration-200 origin-top ${freshmanDropdownOpen
-                          ? "opacity-100 scale-y-100 pointer-events-auto"
-                          : "opacity-0 scale-y-0 pointer-events-none"
-                        }`}
-                      style={{ minWidth: freshmanBtnRef.current?.offsetWidth ?? "auto" }}
-                    >
-                      {(["main", "cs_ab", "cs_direct_prep"] as FreshmanSubTab[]).map(
-                        (tab) => (
-                          <button
-                            key={tab}
-                            onClick={() => {
-                              setActiveGroup("Freshman");
-                              setFreshmanSubTab(tab);
-                              setFreshmanDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${freshmanSubTab === tab
-                                ? "bg-slate-900 text-white"
-                                : "text-slate-700 hover:bg-slate-100"
-                              }`}
-                          >
-                            {subTabLabels[tab]}
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  </div>
+                  <button
+                    key={group}
+                    onClick={() => setActiveGroup("Freshman")}
+                    className={`rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors ${isActive
+                      ? "bg-primary text-white shadow-md"
+                      : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                  >
+                    Freshman
+                  </button>
                 );
               }
               // Other year buttons
               return (
                 <button
                   key={group}
-                  onClick={() => {
-                    setActiveGroup(group);
-                    setFreshmanDropdownOpen(false);
-                  }}
+                  onClick={() => setActiveGroup(group)}
                   className={group === activeGroup
                     ? "rounded-full bg-primary px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-md"
                     : "rounded-full border border-slate-300 bg-white px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50"}
@@ -693,6 +602,49 @@ export default function LessonsPage() {
           )}
         </div>
 
+        {/* --- Freshman Toggle Controls --- */}
+        {activeGroup === "Freshman" && (
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            {/* Toggle 1: CS A / CS B */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Group</span>
+              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+                {([["CS_A", "CS A"], ["CS_B", "CS B"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setCsSection(value)}
+                    className={`rounded-full px-3 py-1 text-xs sm:text-sm font-semibold transition-all duration-200 ${csSection === value
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Toggle 2: Direct / Post Prep */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Track</span>
+              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+                {([["CS_DIRECT", "Direct"], ["POST_PREP", "Post Prep"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setCsTrack(value)}
+                    className={`rounded-full px-3 py-1 text-xs sm:text-sm font-semibold transition-all duration-200 ${csTrack === value
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* --- VIEW 3: ACADEMIC YEARS (GOOGLE GRID) ---
             Full-bleed: breaks out of the page's max-w-4xl column (which keeps the title/tabs
             above aligned with the SCHEDULES/LESSONS/... links) so the wide calendar gets the
@@ -701,7 +653,7 @@ export default function LessonsPage() {
           <div className="relative left-1/2 right-1/2 w-screen -mx-[50vw] px-4 sm:px-6 lg:px-10">
             <Card className="p-6 border-slate-200 bg-slate-50/50">
               <h2 className="text-xl font-bold mb-4">
-                {activeGroup} Schedule {activeGroup === "Freshman" ? (freshmanSubTab === "main" ? "— Main" : freshmanSubTab === "cs_ab" ? "— CS A & CS B" : "— CS Direct & Post Prep") : ""}
+                {activeGroup} Schedule{activeGroup === "Freshman" ? ` — ${csSection === "CS_A" ? "CS A" : "CS B"} + ${csTrack === "CS_DIRECT" ? "Direct" : "Post Prep"} + CM` : ""}
               </h2>
 
               <div
@@ -712,8 +664,8 @@ export default function LessonsPage() {
                   {/* Header Days */}
                   <div
                     className={`grid ${isScrolledRight
-                        ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
-                        : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
+                      ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
+                      : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
                       } border-b border-slate-200 bg-slate-50/80 transition-[grid-template-columns] duration-200`}
                   >
                     <div
@@ -741,8 +693,8 @@ export default function LessonsPage() {
                   {/* Grid Body */}
                   <div
                     className={`grid ${isScrolledRight
-                        ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
-                        : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
+                      ? "grid-cols-[32px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[34px_1fr_1fr_1fr_1fr_1fr]"
+                      : "grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[65px_1fr_1fr_1fr_1fr_1fr]"
                       } relative h-[763px] bg-white transition-[grid-template-columns] duration-200`}
                   >
                     {/* Time Axis */}
@@ -916,9 +868,9 @@ export default function LessonsPage() {
                             setFormData({ ...formData, cohort_ids: ids });
                           }}
                           className={`px-1.5 py-0.5 rounded font-medium transition ${formData.cohort_ids.length === 1 &&
-                              sortedCohorts.find((c: any) => String(c.id) === formData.cohort_ids[0])?.cohort_name === "CM"
-                              ? "bg-indigo-600 text-white"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                            sortedCohorts.find((c: any) => String(c.id) === formData.cohort_ids[0])?.cohort_name === "CM"
+                            ? "bg-indigo-600 text-white"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                             }`}
                         >
                           Just CM
@@ -995,8 +947,8 @@ export default function LessonsPage() {
                           <label
                             key={c.id}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${isChecked
-                                ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
-                                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                              ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
+                              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
                               }`}
                           >
                             <input
@@ -1067,8 +1019,8 @@ export default function LessonsPage() {
                                     <label
                                       key={c.id}
                                       className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition border ${isChecked
-                                          ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                        ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs"
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
                                         }`}
                                     >
                                       <input

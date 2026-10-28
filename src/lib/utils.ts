@@ -13,25 +13,34 @@ export const reverseDayMap: Record<string, string> = {
 
 export const FRESHMAN_YEAR_ID = 1;
 
+/** @deprecated kept as alias for backward compat — use FreshmanToggles instead */
 export type FreshmanSubTab = "main" | "cs_ab" | "cs_direct_prep";
 
+export type CsSection = "CS_A" | "CS_B";
+export type CsTrack = "CS_DIRECT" | "POST_PREP";
+export interface FreshmanToggles {
+  section: CsSection;
+  track: CsTrack;
+}
+
 // The sub-columns inside each day column:
-// For Freshman: "main" (CM / combined), "cs_ab" (CS A | CS B), "cs_direct_prep" (CS Direct | Post Prep).
+// For Freshman: one combined column for the selected CS section + track, and CM.
 // For other years: CS | CM.
-export function yearColumns(yearId: number, subTab: FreshmanSubTab = "main"): { label: string; cohort: string }[] {
+export function yearColumns(
+  yearId: number,
+  _subTabLegacy?: FreshmanSubTab,
+  toggles?: FreshmanToggles,
+): { label: string; cohort: string }[] {
   if (yearId === FRESHMAN_YEAR_ID) {
-    if (subTab === "cs_ab") {
+    if (toggles) {
+      const sectionLabel = toggles.section === "CS_A" ? "CS A" : "CS B";
+      const trackLabel = toggles.track === "CS_DIRECT" ? "Direct" : "Post Prep";
       return [
-        { label: "CS A", cohort: "CS_A" },
-        { label: "CS B", cohort: "CS_B" },
+        { label: `${sectionLabel} + ${trackLabel}`, cohort: `${toggles.section}__${toggles.track}` },
+        { label: "CM", cohort: "CM" },
       ];
     }
-    if (subTab === "cs_direct_prep") {
-      return [
-        { label: "CS Direct", cohort: "CS_DIRECT" },
-        { label: "Post Prep", cohort: "POST_PREP" },
-      ];
-    }
+    // Legacy fallback
     return [
       { label: "CS", cohort: "CS" },
       { label: "CM", cohort: "CM" },
