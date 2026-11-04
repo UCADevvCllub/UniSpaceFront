@@ -481,6 +481,20 @@ export default function LessonsPage() {
       if (l.shareGroup) groups.set(l.shareGroup, [...(groups.get(l.shareGroup) ?? []), l]);
     }
 
+    // When Direct is toggled, collect CM_DIRECT lesson time ranges so we can hide
+    // only the specific CM lessons that overlap with a CM_DIRECT override.
+    const cmDirectSlots: { day: string; startMin: number; endMin: number }[] = [];
+    if (activeGroup === "Freshman" && csTrack === "CS_DIRECT") {
+      for (const l of allLessons) {
+        if (l.yearId === targetId && l.cohortName === "CM_DIRECT") {
+          cmDirectSlots.push({
+            day: l.day,
+            startMin: timeToMinutes(l.startTime),
+            endMin: timeToMinutes(l.endTime),
+          });
+        }
+      }
+    }
     const merged: any[] = [];
     const seenGroups = new Set<string>();
 
@@ -503,11 +517,32 @@ export default function LessonsPage() {
         // Which cohorts belong in the left (CS) column for the current toggle setting?
         const leftCohorts = [csSection, csTrack]; // e.g. ["CS_A", "CS_DIRECT"]
         const hasLeft = hereCohorts.some((c) => leftCohorts.includes(c));
-        const hasCm = hereCohorts.some((c) => c.startsWith("CM"));
+        // CM column: always show CM lessons; show CM_DIRECT only when Direct is toggled.
+        // When Direct is active, hide CM lessons that overlap with a CM_DIRECT lesson.
+        const hasCmDirect = hereCohorts.includes("CM_DIRECT");
+        const hasCmPlain = hereCohorts.includes("CM");
+        let hasCm: boolean;
+        if (csTrack === "CS_DIRECT") {
+          if (hasCmDirect) {
+            hasCm = true;
+          } else if (hasCmPlain) {
+            // Show this CM lesson only if no CM_DIRECT lesson overlaps its time slot
+            const lessonStart = timeToMinutes(lesson.startTime);
+            const lessonEnd = timeToMinutes(lesson.endTime);
+            const overridden = cmDirectSlots.some(
+              (s) => s.day === lesson.day && s.startMin < lessonEnd && s.endMin > lessonStart
+            );
+            hasCm = !overridden;
+          } else {
+            hasCm = false;
+          }
+        } else {
+          // Post Prep: show CM, hide CM_DIRECT
+          hasCm = hasCmPlain;
+        }
 
         // Skip lessons that match neither the selected toggles nor CM
         if (!hasLeft && !hasCm) continue;
-
         // Determine column placement
         const isCombined = hasLeft && hasCm;
         const columnIndex = hasLeft ? 0 : 1;
