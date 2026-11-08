@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { TopHeader } from "@/components/top-header";
 import { PageContainer } from "@/components/page-container";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "UCA Campus Hub",
@@ -21,6 +22,7 @@ export default function RootLayout({
           <TopHeader />
           <PageContainer>{children}</PageContainer>
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
